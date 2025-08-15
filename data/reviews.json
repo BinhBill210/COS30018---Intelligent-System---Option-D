@@ -1,0 +1,72 @@
+[
+  {
+    "id": "r001",
+    "text": "The delivery was late and the box was damaged when it arrived.",
+    "rating": 2,
+    "date": "2024-06-01T10:12:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r002",
+    "text": "Customer support was incredibly helpful and resolved my issue quickly.",
+    "rating": 5,
+    "date": "2024-06-03T14:45:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r003",
+    "text": "I found the price to be high compared to competitors.",
+    "rating": 3,
+    "date": "2024-05-21T09:30:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r004",
+    "text": "The product quality is outstanding — exceeded my expectations.",
+    "rating": 5,
+    "date": "2024-04-11T11:00:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r005",
+    "text": "App crashes constantly on startup. Very frustrating experience.",
+    "rating": 1,
+    "date": "2024-06-07T08:20:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r006",
+    "text": "I like the new interface, it's clean and intuitive.",
+    "rating": 4,
+    "date": "2024-03-29T16:05:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r007",
+    "text": "Shipping took two weeks longer than promised, unacceptable.",
+    "rating": 1,
+    "date": "2024-05-30T13:15:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r008",
+    "text": "Returned item process was smooth and refund arrived fast.",
+    "rating": 5,
+    "date": "2024-04-22T10:50:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r009",
+    "text": "Battery life is poor; it barely lasts a day with normal use.",
+    "rating": 1,
+    "date": "2024-06-02T07:40:00Z",
+    "source": "synthetic"
+  },
+  {
+    "id": "r010",
+    "text": "The features are great but the documentation is lacking.",
+    "rating": 3,
+    "date": "2024-05-10T12:00:00Z",
+    "source": "synthetic"
+  }
+]
