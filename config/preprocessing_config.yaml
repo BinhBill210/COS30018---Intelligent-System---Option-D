@@ -1,0 +1,173 @@
+# Data Preprocessing Configuration for Yelp Dataset
+# LLM-Powered Business Improvement Agent Project
+
+# Dataset Processing Settings
+datasets:
+  business:
+    max_records: 50000  # Sample size for development
+    critical_columns: ['business_id', 'name', 'stars']
+    optional_columns: ['address', 'city', 'state', 'categories', 'attributes', 'hours']
+    
+  review:
+    max_records: 100000  # Larger sample for comprehensive text analysis
+    critical_columns: ['review_id', 'user_id', 'business_id', 'stars', 'text']
+    optional_columns: ['useful', 'funny', 'cool', 'date']
+    
+  user:
+    max_records: 30000
+    critical_columns: ['user_id', 'review_count', 'average_stars']
+    optional_columns: ['friends', 'elite', 'fans', 'yelping_since']
+    
+  tip:
+    max_records: 20000
+    critical_columns: ['user_id', 'business_id', 'text']
+    optional_columns: ['date', 'compliment_count']
+    
+  checkin:
+    max_records: 10000
+    critical_columns: ['business_id']
+    optional_columns: ['date']
+
+# Missing Value Handling Strategy
+missing_values:
+  strategy: 'smart'  # Options: 'strict', 'smart', 'permissive'
+  
+  # Column-specific strategies
+  text_columns:
+    action: 'remove'  # Remove records with missing text
+    min_length: 3     # Minimum text length
+    
+  rating_columns:
+    action: 'remove'  # Remove records with missing ratings
+    valid_range: [1, 5]  # Valid rating range
+    
+  id_columns:
+    action: 'remove'  # Remove records with missing IDs
+    
+  engagement_columns:  # useful, funny, cool
+    action: 'fill_zero'  # Fill missing engagement metrics with 0
+    
+  metadata_columns:  # address, categories, etc.
+    action: 'keep'  # Keep records but mark missing values
+
+# Duplicate Detection Settings
+duplicates:
+  exact_duplicates:
+    enabled: true
+    keep: 'first'  # Options: 'first', 'last'
+    
+  near_duplicates:
+    enabled: true
+    similarity_threshold: 0.85  # Text similarity threshold (0-1)
+    min_text_length: 10  # Minimum text length for comparison
+    
+  user_business_duplicates:
+    enabled: true
+    max_reviews_per_user_business: 3  # Max reviews from same user for same business
+
+# Spam Detection Settings
+spam_detection:
+  enabled: true
+  
+  # Text patterns indicating spam
+  patterns:
+    - '^[A-Z\s!]+$'  # ALL CAPS text
+    - '(call|text|phone).{0,20}\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'  # Phone numbers
+    - '(visit|check|goto).{0,20}(www\.|http)'  # URLs
+    - '(.)\1{4,}'  # Repeated characters (aaaaa)
+    - '^(.{1,20})\1{3,}'  # Repeated phrases
+    
+  # Heuristic filters
+  min_text_length: 5
+  max_punctuation_ratio: 0.5
+  max_repeated_chars: 5
+  
+  # Rating-based spam detection
+  extreme_rating_short_text:
+    enabled: true
+    max_text_length: 10
+    extreme_ratings: [1, 5]
+
+# Data Consistency Settings
+consistency:
+  # Rating standardization
+  ratings:
+    scale: [1, 5]  # Valid rating scale
+    precision: 0.5  # Round to nearest 0.5 (Yelp system)
+    
+  # Date standardization
+  dates:
+    format: 'ISO'  # Target format
+    timezone: 'UTC'
+    handle_errors: 'coerce'  # Convert invalid dates to NaT
+    
+  # Text standardization
+  text:
+    encoding: 'utf-8'
+    normalize_whitespace: true
+    remove_control_chars: true
+    max_length: 5000  # Maximum text length
+    
+  # Geographic coordinates
+  coordinates:
+    latitude_range: [-90, 90]
+    longitude_range: [-180, 180]
+
+# Data Validation Settings
+validation:
+  # Quality thresholds
+  quality_thresholds:
+    min_text_length: 3
+    max_text_length: 5000
+    min_rating: 1
+    max_rating: 5
+    
+  # Required field validation
+  required_fields:
+    business: ['business_id', 'name', 'stars']
+    review: ['review_id', 'user_id', 'business_id', 'stars', 'text']
+    user: ['user_id']
+    tip: ['user_id', 'business_id', 'text']
+    checkin: ['business_id']
+    
+  # Data type validation
+  data_types:
+    ids: 'string'
+    ratings: 'float'
+    counts: 'integer'
+    dates: 'datetime'
+    text: 'string'
+    coordinates: 'float'
+
+# Output Settings
+output:
+  # File formats to save
+  formats: ['parquet', 'csv']
+  
+  # Compression settings
+  compression:
+    parquet: 'snappy'
+    csv: 'gzip'
+    
+  # Quality reporting
+  generate_report: true
+  report_format: 'json'
+  include_samples: true
+  sample_size: 10
+
+# Processing Settings
+processing:
+  # Memory management
+  chunk_size: 10000
+  max_memory_usage: '2GB'
+  
+  # Parallel processing
+  n_jobs: -1  # Use all available cores
+  
+  # Progress tracking
+  show_progress: true
+  log_level: 'INFO'
+  
+  # Backup settings
+  create_backup: false
+  backup_original: false
