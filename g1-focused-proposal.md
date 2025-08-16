@@ -61,50 +61,58 @@ Sophisticated data preparation capabilities:
 - **Feature Engineering**: Automatic extraction of metadata features (review length, rating correlation, temporal patterns)
 - **Bias Detection**: Identification and mitigation of dataset biases
 
-### 3. Core Autonomous Agent (The "Brain")
+
+
+### 3. Indexer - Embeddings and Vector DB
+
+Convert review text to vector embeddings and store them to enable fast retrieval. 
+
+- **Embedding library**: sentence-transformers, all-MiniLM-L6-v2
+- **Local store**: FAISS, use IndexFlatIP with L2-normalized vectors to get cosine similarity
+
+
+### 4. Core Autonomous Agent (The "Brain")
 
 The sophisticated central intelligence component:
 
-- **Agent Framework**: LangChain ReAct or AutoGPT-style autonomous reasoning
-- **Multi-LLM Support**: Seamless switching between GPT-4, Claude, Llama 3, Mistral
-- **Autonomous Planning**: Self-directed task decomposition and execution planning
+- **Agent Framework**: use LLM for high-level reasoning
+- **LLM Support**: Google AI Studio
 - **Dynamic Tool Selection**: Intelligent choice of analysis tools based on data characteristics
-- **Self-Reflection**: Ability to evaluate and improve its own outputs
+- **Self-Reflection**: Every claim must cite evidence
 - **Memory Management**: Persistent context and learning from previous analyses
+- **Auditable**: log tool call, prompts, evidence ids in final JSON output for evaluation
 
-### 4. Comprehensive Analysis Toolkit (Agent's Arsenal)
+### 5. Comprehensive Analysis Toolkit (Agent's Arsenal)
 
 Advanced analysis capabilities at the agent's disposal:
 
+
+#### Retriever
+Use FAISS local index + vector DB
+
 #### Advanced Sentiment Analysis Tool
 
-- **Multi-dimensional Analysis**: Sentiment, emotion, urgency, satisfaction levels
-- **Aspect-Based Sentiment**: Fine-grained analysis of specific product/service features
-- **Temporal Sentiment Tracking**: Changes in sentiment over time
-- **Comparative Sentiment**: Cross-competitor sentiment analysis
+- **MVP implementation**: Sentiment analysis using Hugging Face
+- **Stretch**: multi-dimensional emotion, fine-grained analysis of specific product/service features
+
 
 #### Intelligent Topic Modeling Tool
 
-- **Adaptive Topic Discovery**: Dynamic topic modeling with optimal topic number detection
-- **Hierarchical Topics**: Multi-level topic organization (main themes → sub-themes)
-- **Trend Analysis**: Topic evolution and emergence patterns
-- **Entity Recognition**: Advanced identification of products, features, competitors
+- **MVP**: topic discovery using sentence-transformers and HDBSCAN
 
 #### Contextual Summarization Tool
 
 - **Multi-Level Summaries**: Executive, detailed, and technical summary levels
-- **Stakeholder-Specific Summaries**: Tailored outputs for different business roles
-- **Priority-Based Summarization**: Focus on high-impact findings
-- **Comparative Summarization**: Cross-period and cross-competitor analysis
+- **Pattern**: Input aggregated stats and evidence snippets, output summary with evidence
 
 #### Strategic Insight Generation Tool
 
+- **Heuristic scoring formula**
 - **Business Impact Scoring**: Quantified priority rankings for recommendations
 - **Root Cause Analysis**: Deep investigation of identified issues
-- **Opportunity Identification**: Proactive improvement suggestions
-- **Implementation Roadmaps**: Actionable step-by-step improvement plans
+- **Recommendation**: Include estimated effort, priority, evidence
 
-### 5. Interactive User Interface
+### 6. Interactive User Interface
 
 Comprehensive web-based interface:
 
@@ -113,7 +121,7 @@ Comprehensive web-based interface:
 - **Real-Time Analysis Monitoring**: Live view of agent decision-meaking process if possible
 - **Visualization Suite**: Advanced charts, graphs, and business intelligence displays
 
-### 6. Comprehensive Evaluation Module
+### 7. Comprehensive Evaluation Module
 
 Rigorous testing and validation:
 
