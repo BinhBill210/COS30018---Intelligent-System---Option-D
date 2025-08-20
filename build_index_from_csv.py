@@ -22,61 +22,31 @@ import argparse
 import json
 import math
 from pathlib import Path
-from typing import List
-
+from typing import List, Dict, Any
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 import faiss
 import torch
 
-# ---------- JSON serialization helper ----------
 def make_json_serializable(v):
     """Convert pandas/numpy/datetime types into JSON-serializable Python primitives."""
-    # None / NaN
-    try:
-        if v is None:
-            return None
-    except Exception:
-        pass
-    # pandas NA / numpy nan
-    if pd.isna(v):
+    if pd.isna(v) or v is None:
         return None
-
-    # pandas Timestamp or datetime-like
-    try:
-        if isinstance(v, pd.Timestamp):
-            return v.isoformat()
-    except Exception:
-        pass
-
-    # numpy scalar types
+    if isinstance(v, (pd.Timestamp,)):
+        return v.isoformat()
     if isinstance(v, (np.integer,)):
         return int(v)
     if isinstance(v, (np.floating,)):
         return float(v)
     if isinstance(v, (np.bool_,)):
         return bool(v)
-
-    # python datetime/date
-    try:
-        import datetime
-        if isinstance(v, (datetime.datetime, datetime.date)):
-            return v.isoformat()
-    except Exception:
-        pass
-
-    # dict / list recursion
-    if isinstance(v, dict):
+    if isinstance(v, (dict,)):
         return {str(k): make_json_serializable(val) for k, val in v.items()}
-    if isinstance(v, list):
+    if isinstance(v, (list, tuple)):
         return [make_json_serializable(x) for x in v]
-
-    # basic python primitives (str, int, float, bool)
     if isinstance(v, (str, int, float, bool)):
         return v
-
-    # fallback: try string conversion
     try:
         return str(v)
     except Exception:
@@ -101,28 +71,49 @@ def read_file_to_df(path: Path):
     else:
         raise ValueError("Unsupported file type: " + str(path))
 
-def prepare_records_from_dataframe(df: pd.DataFrame, id_col="review_id", text_col="text", max_rows: int = None):
+def prepare_records_from_dataframe(df: pd.DataFrame, id_col="review_id", text_col="text", 
+                                  metadata_cols=None, max_rows: int = None):
+    """Prepare records with enhanced metadata handling"""
+    if metadata_cols is None:
+        # Include all columns except the ID and text columns as metadata
+        metadata_cols = [col for col in df.columns if col not in [id_col, text_col]]
+    
     records = []
     if max_rows:
         df = df.head(max_rows)
+    
     for idx, row in df.iterrows():
-        rid = None
-        if id_col in df.columns:
-            rid = row.get(id_col)
+        rid = row.get(id_col, f"r_{idx}")
         if pd.isna(rid) or rid is None:
             rid = f"r_{idx}"
         rid = str(rid)
+        
         text = row.get(text_col, "")
         if pd.isna(text):
             text = ""
-        # collect some metadata (serialize later)
+        
+        # Collect metadata from specified columns
         raw_meta = {}
-        for k in ("date", "stars", "business_id", "user_id"):
-            if k in df.columns:
-                raw_meta[k] = row.get(k)
-        # convert to JSON-serializable
+        for col in metadata_cols:
+            if col in df.columns:
+                raw_meta[col] = row.get(col)
+        
+        # Convert to JSON-serializable
         serial_meta = {k: make_json_serializable(v) for k, v in raw_meta.items()}
-        records.append({"id": rid, "text": str(text), "meta": serial_meta})
+        
+        # Create a combined text field that includes metadata for better retrieval
+        # This helps the embeddings capture both text content and metadata context
+        metadata_text = " ".join([f"{k}: {v}" for k, v in serial_meta.items() 
+                                if v is not None and k != text_col])
+        combined_text = f"{text} {metadata_text}".strip()
+        
+        records.append({
+            "id": rid, 
+            "text": str(text),
+            "combined_text": combined_text,
+            "meta": serial_meta
+        })
+    
     return records
 
 # ---------- chunking ----------
@@ -146,21 +137,30 @@ def chunk_text(text: str, chunk_size:int=0, stride:int=50) -> List[str]:
 # ---------- encoding & index building ----------
 def encode_and_build_index(records, outdir="index_demo", model_name="all-MiniLM-L6-v2",
                            chunk_size:int=0, stride:int=50, batch_size:int=128, device:str="cpu"):
-    outdir = Path(outdir); outdir.mkdir(parents=True, exist_ok=True)
-    # prepare chunks and metadata
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    
+    # Prepare chunks and metadata
     texts = []
     id_map = []
     meta = {}
+    
     for r in records:
-        chunks = chunk_text(r["text"], chunk_size=chunk_size, stride=stride)
+        # Use combined text (text + metadata) for embedding
+        chunks = chunk_text(r["combined_text"], chunk_size=chunk_size, stride=stride)
+        
         for i, ch in enumerate(chunks):
-            chunk_id = f"{r['id']}__c{i}" if chunk_size>0 else r["id"]
+            chunk_id = f"{r['id']}__c{i}" if chunk_size > 0 else r["id"]
             id_map.append(chunk_id)
             texts.append(ch)
-            # ensure metadata values are JSON-friendly
-            row_meta = r.get("meta") or {}
-            serial_row_meta = {k: make_json_serializable(v) for k, v in row_meta.items()}
-            meta[chunk_id] = {"orig_id": r["id"], "text": ch, **serial_row_meta}
+            
+            # Store metadata for this chunk
+            meta[chunk_id] = {
+                "orig_id": r["id"],
+                "text": r["text"],  # Original text without metadata
+                "chunk_text": ch,   # The actual text that was embedded
+                **r["meta"]         # All metadata
+            }
 
     n = len(texts)
     if n == 0:

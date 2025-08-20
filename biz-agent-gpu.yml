@@ -1,3 +1,4 @@
+# environment.yml
 name: biz-agent-gpu
 channels:
   - pytorch
@@ -11,13 +12,13 @@ dependencies:
   - torchvision
   - torchaudio
   - pytorch-cuda=11.8
-  - faiss-cpu            # use faiss-gpu instead if you are on Linux and your CUDA matches
+  - faiss-cpu           # Use CPU version of FAISS
   - pandas
   - scikit-learn
   - spacy
   - pyarrow
   - fastparquet
-
+  - matplotlib         # For visualization tools
   - pip:
     - sentence-transformers
     - transformers==4.34.0
@@ -26,3 +27,5 @@ dependencies:
     - bertopic
     - hdbscan
     - umap-learn
+    - accelerate       # For faster inference
+    - protobuf         # Required by some models

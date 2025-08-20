@@ -1,0 +1,32 @@
+# environment_fixed.yml
+name: biz-agent-gpu-2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch=2.0.1
+  - torchvision=0.15.2
+  - torchaudio=2.0.2
+  - pytorch-cuda=11.8
+  - faiss-gpu
+  - pandas
+  - scikit-learn
+  - spacy
+  - pyarrow
+  - fastparquet
+  - matplotlib
+  - pip:
+    - sentence-transformers
+    - transformers==4.30.2  # Slightly older but stable version
+    - tqdm
+    - sentencepiece
+    - bertopic
+    - hdbscan
+    - umap-learn
+    - protobuf
+    - accelerate==0.20.3  # Specific version that works with transformers 4.30.2
+    - huggingface-hub==0.16.4  # Compatible version
