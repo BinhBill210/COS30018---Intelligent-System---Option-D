@@ -1,7 +1,7 @@
-run python build_index.py first to build the index first
+conda env create -f environment.yml
 
-run python load_and_query_example.py "late delivery" 3 
+python -m spacy download en_core_web_sm
 
-"late delivery" is the prompt
+put the cleaned datasets files to cleaned_data folder
 
-3 is number of top-K results
+fuck qwen3-8b with all the mismatching versions bullshit

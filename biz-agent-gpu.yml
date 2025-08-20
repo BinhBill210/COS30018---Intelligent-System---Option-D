@@ -1,0 +1,28 @@
+name: biz-agent-gpu
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
+  - faiss-cpu            # use faiss-gpu instead if you are on Linux and your CUDA matches
+  - pandas
+  - scikit-learn
+  - spacy
+  - pyarrow
+  - fastparquet
+
+  - pip:
+    - sentence-transformers
+    - transformers==4.34.0
+    - tqdm
+    - sentencepiece
+    - bertopic
+    - hdbscan
+    - umap-learn
