@@ -1,31 +1,111 @@
 # local_llm.py
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 import torch
-from base_llm import BaseLLM
+from typing import Optional
 
-
-class LocalLLM(BaseLLM):
-    def __init__(self, model_name="microsoft/DialoGPT-medium"):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-    
-    def generate(self, prompt: str, max_length: int = 500, **kwargs):
-        inputs = self.tokenizer.encode(prompt, return_tensors="pt")
+class LocalLLM:
+    def __init__(self, model_name: str = "Qwen/Qwen2-8B-Instruct", use_4bit: bool = True):
+        self.model_name = model_name
+        self.use_4bit = use_4bit
         
-        with torch.no_grad():
-            outputs = self.model.generate(
-                inputs,
-                max_length=max_length,
-                num_return_sequences=1,
+        print(f"Loading model: {model_name}")
+        print(f"Using 4-bit quantization: {self.use_4bit}")
+        print(f"CUDA available: {torch.cuda.is_available()}")
+        
+        try:
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_name, 
+                trust_remote_code=True
+            )
+            
+            # Configure model loading with quantization if requested
+            if self.use_4bit:
+                try:
+                    from transformers import BitsAndBytesConfig
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_use_double_quant=True,
+                    )
+                    
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        model_name,
+                        quantization_config=quantization_config,
+                        device_map="auto",
+                        trust_remote_code=True
+                    )
+                    print("✓ Loaded with 4-bit quantization")
+                except Exception as e:
+                    print(f"4-bit loading failed: {e}, falling back to standard loading")
+                    self.use_4bit = False
+            
+            # Standard loading without quantization
+            if not self.use_4bit:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="auto" if torch.cuda.is_available() else None,
+                    trust_remote_code=True
+                )
+                print("✓ Loaded with standard precision")
+            
+            # Set generation config
+            self.generation_config = GenerationConfig(
                 temperature=0.7,
+                top_p=0.9,
+                top_k=50,
+                repetition_penalty=1.1,
                 do_sample=True,
+                max_new_tokens=512,
                 pad_token_id=self.tokenizer.eos_token_id
             )
-        
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract only the new generated text
-        response = response[len(prompt):].strip()
-        
-        return response
+            
+            print(f"✓ Successfully loaded {model_name}")
+            
+        except Exception as e:
+            print(f"Error loading {model_name}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+    
+    def generate(self, prompt: str, **kwargs):
+        try:
+            # Format the prompt for Qwen2
+            messages = [
+                {"role": "system", "content": "You are a business review analysis agent that follows instructions precisely and uses tools when needed."},
+                {"role": "user", "content": prompt}
+            ]
+            
+            # Apply chat template
+            text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            
+            # Tokenize
+            model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+            
+            # Generate
+            generated_ids = self.model.generate(
+                **model_inputs,
+                generation_config=self.generation_config,
+                **kwargs
+            )
+            
+            # Decode
+            generated_ids = [
+                output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            ]
+            
+            response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+            return response.strip()
+            
+        except Exception as e:
+            print(f"Generation error: {e}")
+            import traceback
+            traceback.print_exc()
+            return "I couldn't generate a response due to an error."
