@@ -1,9 +1,9 @@
-# test_qwen.py
+# test_qwen_1_5b.py
 from local_llm import LocalLLM
 import torch
 
-def test_qwen():
-    print("Testing Qwen2-8B model...")
+def test_qwen_1_5b():
+    print("Testing Qwen2.5-1.5B model...")
     print(f"CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
@@ -28,8 +28,8 @@ User: What are people saying about service quality of business with id 7ATYjTIgM
 Agent:"""
 
     try:
-        # Try with 4-bit quantization first
-        llm = LocalLLM("Qwen/Qwen2-8B-Instruct", use_4bit=True)
+        # Try with 4-bit quantization first (should work well on your GPU)
+        llm = LocalLLM("Qwen/Qwen2.5-1.5B-Instruct", use_4bit=True)
         response = llm.generate(test_prompt)
         print("Response:")
         print(response)
@@ -40,14 +40,14 @@ Agent:"""
         
         try:
             # Fallback to without quantization
-            llm = LocalLLM("Qwen/Qwen2-8B-Instruct", use_4bit=False)
+            llm = LocalLLM("Qwen/Qwen2.5-1.5B-Instruct", use_4bit=False)
             response = llm.generate(test_prompt)
             print("Response:")
             print(response)
             
         except Exception as e2:
             print(f"Error without quantization: {e2}")
-            print("Model is too large for available memory.")
+            print("Model failed to load.")
 
 if __name__ == "__main__":
-    test_qwen()
+    test_qwen_1_5b()

@@ -1,26 +1,40 @@
 # local_llm.py
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+from huggingface_hub import login, whoami
 import torch
+import os
 from typing import Optional
 
 class LocalLLM:
-    def __init__(self, model_name: str = "Qwen/Qwen2-8B-Instruct", use_4bit: bool = True):
+    def __init__(self, model_name: str = "Qwen/Qwen2.5-1.5B-Instruct", use_4bit: bool = True, hf_token: Optional[str] = None):
         self.model_name = model_name
         self.use_4bit = use_4bit
+        
+        # Handle authentication
+        self.hf_token = hf_token or os.getenv('HF_TOKEN')
+        if self.hf_token:
+            try:
+                login(token=self.hf_token)
+                print("✓ Logged in to Hugging Face Hub")
+            except Exception as e:
+                print(f"Warning: Could not login to Hugging Face Hub: {e}")
+        else:
+            print("Warning: No Hugging Face token provided. Some models may require authentication.")
         
         print(f"Loading model: {model_name}")
         print(f"Using 4-bit quantization: {self.use_4bit}")
         print(f"CUDA available: {torch.cuda.is_available()}")
         
         try:
-            # Load tokenizer
+            # Load tokenizer with authentication
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name, 
-                trust_remote_code=True
+                trust_remote_code=True,
+                token=self.hf_token
             )
             
             # Configure model loading with quantization if requested
-            if self.use_4bit:
+            if self.use_4bit and torch.cuda.is_available():
                 try:
                     from transformers import BitsAndBytesConfig
                     quantization_config = BitsAndBytesConfig(
@@ -34,7 +48,8 @@ class LocalLLM:
                         model_name,
                         quantization_config=quantization_config,
                         device_map="auto",
-                        trust_remote_code=True
+                        trust_remote_code=True,
+                        token=self.hf_token
                     )
                     print("✓ Loaded with 4-bit quantization")
                 except Exception as e:
@@ -42,12 +57,13 @@ class LocalLLM:
                     self.use_4bit = False
             
             # Standard loading without quantization
-            if not self.use_4bit:
+            if not self.use_4bit or not torch.cuda.is_available():
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_name,
                     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
                     device_map="auto" if torch.cuda.is_available() else None,
-                    trust_remote_code=True
+                    trust_remote_code=True,
+                    token=self.hf_token
                 )
                 print("✓ Loaded with standard precision")
             
@@ -66,13 +82,20 @@ class LocalLLM:
             
         except Exception as e:
             print(f"Error loading {model_name}: {e}")
+            # Suggest authentication if it's a 401 error
+            if "401" in str(e) or "authentication" in str(e).lower():
+                print("\nThis model may require authentication.")
+                print("1. Create a Hugging Face account at https://huggingface.co/join")
+                print("2. Get an access token from https://huggingface.co/settings/tokens")
+                print("3. Set it as an environment variable: export HF_TOKEN=your_token_here")
+                print("4. Or pass it to the constructor: LocalLLM(hf_token='your_token_here')")
             import traceback
             traceback.print_exc()
             raise
     
     def generate(self, prompt: str, **kwargs):
         try:
-            # Format the prompt for Qwen2
+            # Format the prompt for Qwen2.5
             messages = [
                 {"role": "system", "content": "You are a business review analysis agent that follows instructions precisely and uses tools when needed."},
                 {"role": "user", "content": prompt}
@@ -86,7 +109,9 @@ class LocalLLM:
             )
             
             # Tokenize
-            model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+            model_inputs = self.tokenizer([text], return_tensors="pt")
+            if torch.cuda.is_available():
+                model_inputs = model_inputs.to(self.model.device)
             
             # Generate
             generated_ids = self.model.generate(
