@@ -37,7 +37,7 @@ def main():
     queries = [
         "What are people saying about service quality?",
         "Analyze sentiment of reviews for business XQfwVwDr-v0ZS3_CbbE5Xw",
-        "Give me a summary of review statistics"
+        "Give me a summary of review statistics for business ID XQfwVwDr-v0ZS3_CbbE5Xw"
     ]
     
     for i, query in enumerate(queries):
