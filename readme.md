@@ -1,5 +1,9 @@
 download the index_demo folder from https://drive.google.com/drive/folders/1Y4gnvplLDlb5-wxB2W3M4QbQFi8mhrWL?usp=sharing
 
+download the cleaned_data folder from https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing
+
+put both of them in the project root folder
+
 conda env create -f another_env.yml
 
 then activate the environment by conda activate biz-agent-gpu-2
