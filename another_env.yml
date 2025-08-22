@@ -1,0 +1,28 @@
+# environment_fixed.yml
+name: biz-agent-gpu-2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - faiss-gpu
+  - pandas
+  - scikit-learn
+  - spacy
+  - pyarrow
+  - fastparquet
+  - matplotlib
+  - pip:
+    - sentence-transformers
+    - transformers==4.30.2
+    - tqdm
+    - sentencepiece
+    - bertopic
+    - hdbscan
+    - umap-learn
+    - protobuf
+    - accelerate==0.20.3
+    - huggingface-hub==0.16.4

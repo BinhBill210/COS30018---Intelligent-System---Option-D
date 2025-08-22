@@ -1,0 +1,29 @@
+# environment.yml for macOS (no CUDA)
+name: biz-agent-macos
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - faiss-cpu           # Use CPU version of FAISS (no GPU on macOS)
+  - pandas
+  - scikit-learn
+  - spacy
+  - pyarrow
+  - fastparquet
+  - matplotlib
+  - pip:
+    - sentence-transformers
+    - transformers==4.34.0
+    - tqdm
+    - sentencepiece
+    - bertopic
+    - hdbscan
+    - umap-learn
+    - accelerate
+    - protobuf
