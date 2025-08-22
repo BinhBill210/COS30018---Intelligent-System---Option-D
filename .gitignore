@@ -1,3 +1,11 @@
 /cleaned_data
 /index_demo
 /__pycache__/
+data/processed/business_cleaned.csv
+data/processed/business_cleaned.parquet
+data/processed/data_quality_report.json
+data/processed/review_cleaned.csv
+data/processed/review_cleaned.parquet
+raw_data/yelp_academic_dataset_review.json
+raw_data/yelp_academic_dataset_checkin.json
+raw_data/yelp_academic_dataset_business.json
