@@ -6,7 +6,7 @@ from local_llm import LocalLLM
 def setup_agent():
     # Initialize tools
     sentiment_tool = SentimentSummaryTool()
-    data_tool = DataSummaryTool("cleaned_data/review_cleaned.csv")
+    data_tool = DataSummaryTool("data/processed/review_cleaned.csv")
     
     # Create tool wrappers
     tools = [

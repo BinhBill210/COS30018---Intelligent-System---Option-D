@@ -27,7 +27,7 @@ def test_basic_functionality():
     
     # Test data tool
     try:
-        data_tool = DataSummaryTool("cleaned_data/review_cleaned.csv")
+        data_tool = DataSummaryTool("data/processed/review_cleaned.csv")
         summary = data_tool()
         print("✓ Data tool works")
         print(f"Summary: {summary}")
