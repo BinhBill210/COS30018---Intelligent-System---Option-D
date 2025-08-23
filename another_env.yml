@@ -26,3 +26,4 @@ dependencies:
     - protobuf
     - accelerate==0.20.3
     - huggingface-hub==0.16.4
+    - spacy

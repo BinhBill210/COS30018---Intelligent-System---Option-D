@@ -23,7 +23,7 @@ def setup_agent():
     ]
     
     # Initialize LLM
-    llm = LocalLLM()
+    llm = LocalLLM(use_4bit=False)
     
     # Create agent - pass only tools to the constructor
     agent = Agent(tools=tools, verbose=True)
