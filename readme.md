@@ -37,7 +37,7 @@ If you want to run the agent with preprocessed data and a pre-built index, follo
 1. **Download pre-built data and index:**
 
    * Download the `index_demo` folder from [Google Drive](https://drive.google.com/drive/folders/1Y4gnvplLDlb5-wxB2W3M4QbQFi8mhrWL?usp=sharing) and place it in the project root.
-   * Download the `processed` data folder from [Google Drive](https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing) and place it inside the `data` folder.
+   * Download the `processed` data folder from [Google Drive](https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing) and place it inside the `data/processed` folder.
 2. **Create and activate Conda environment:**
 
    ```bash
