@@ -2,6 +2,11 @@
 
 This project contains a business recommendation agent that can suggest businesses based on user queries.
 
+## Available Versions
+
+- **Original Agent** (`demo.py`, `demo2.py`) - Custom ReAct implementation
+- **LangChain Agent** (`demo2_langchain.py`) - Enhanced version using LangChain framework ✨ **NEW**
+
 ## Setup
 
 There are two main parts of this project: data preprocessing and running the agent.
@@ -55,3 +60,41 @@ If you want to run the agent with preprocessed data and a pre-built index, follo
    ```bash
    python demo2.py
    ```
+
+### For LangChain Agent (Recommended) ✨
+
+The LangChain version provides enhanced capabilities and better error handling:
+
+#### Quick Start
+
+1. **Download data** (same as above):
+   * Download the `processed` data folder from [Google Drive](https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing) and place it inside the `data` folder.
+
+2. **Create environment** (choose one):
+
+   **For GPU users:**
+   ```bash
+   conda env create -f langchain-demo-env.yml
+   conda activate langchain-demo
+   ```
+
+   **For CPU-only users:**
+   ```bash
+   conda env create -f langchain-demo-cpu.yml
+   conda activate langchain-demo-cpu
+   ```
+
+3. **Run the LangChain demo:**
+   ```bash
+   python demo2_langchain.py
+   ```
+
+#### Features
+- 🔧 **Better Tool Integration**: Proper schema validation and error handling
+- 🧠 **Memory Management**: Conversation memory for multi-turn interactions  
+- 📊 **Enhanced Monitoring**: Detailed execution logging and debugging
+- 🔄 **Robust Architecture**: Battle-tested LangChain framework
+- ⚡ **Performance**: Optimized execution with fallback options
+
+#### Troubleshooting
+For detailed setup instructions and troubleshooting, see [SETUP_LANGCHAIN.md](SETUP_LANGCHAIN.md).
