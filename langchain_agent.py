@@ -73,7 +73,9 @@ def create_business_agent():
     tools = create_langchain_tools()
     
     # Create custom prompt template for ReAct pattern
-    react_prompt = PromptTemplate.from_template("""
+    react_prompt = PromptTemplate.from_template
+    (
+"""
 You are a business review analysis agent. You have access to various tools to help analyze business reviews.
 
 TOOLS:
