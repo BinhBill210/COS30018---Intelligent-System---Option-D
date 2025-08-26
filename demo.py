@@ -1,13 +1,13 @@
 # demo.py (updated)
 from agent import Agent, Tool
-from tools import ReviewSearchTool, SentimentSummaryTool, DataSummaryTool
+from tools_chromadb import ReviewSearchTool, SentimentSummaryTool, DataSummaryTool
 from local_llm import LocalLLM
 
 def setup_agent():
     # Initialize tools
-    search_tool = ReviewSearchTool("index_demo")
+    search_tool = ReviewSearchTool("./chroma_db")  # Use ChromaDB instead of FAISS index
     sentiment_tool = SentimentSummaryTool()
-    data_tool = DataSummaryTool("data/processed/review_cleaned.csv")
+    data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
     
     # Create tool wrappers
     tools = [

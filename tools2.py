@@ -1,10 +1,8 @@
-# tools.py
+# tools2.py - Updated for ChromaDB migration
 from typing import List, Dict, Any
 import pandas as pd
 from transformers import pipeline
-import faiss
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 

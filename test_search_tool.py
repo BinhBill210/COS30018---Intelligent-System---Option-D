@@ -1,5 +1,5 @@
 # test_search_tool.py
-from tools import ReviewSearchTool
+from tools_chromadb import ReviewSearchTool
 import torch
 
 def test_search_tool():
@@ -10,7 +10,7 @@ def test_search_tool():
     
     try:
         # Try with CPU first
-        search_tool = ReviewSearchTool("index_demo")
+        search_tool = ReviewSearchTool("./chroma_db")
         results = search_tool("service quality", k=3)
         print("✓ Search tool works on CPU")
         print(f"Found {len(results)} results")

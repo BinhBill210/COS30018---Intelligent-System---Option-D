@@ -17,7 +17,7 @@ dependencies:
 
   # Essential data processing
   - pandas=2.3.*
-  - numpy=1.24.*
+  - numpy>=2.0.*
   - scipy=1.15.*
   - scikit-learn=1.7.*
   
@@ -29,7 +29,7 @@ dependencies:
   - fastparquet
   - pyyaml=6.0.*
   
-  # Vector search (choose one based on your hardware)
+  # Vector search - keeping FAISS for compatibility during migration
   # For GPU (if you have CUDA):
   - faiss-gpu=1.9.*
   # For CPU only (comment out faiss-gpu and uncomment below):
@@ -52,6 +52,10 @@ dependencies:
       - langchain-core>=0.3.74
       - langsmith>=0.4.16
       
+      # Vector database - ChromaDB
+      - chromadb>=0.4.0
+      - langchain-chroma>=0.1.0
+      
       # HuggingFace ecosystem
       - transformers>=4.55.0
       - sentence-transformers>=5.1.0
@@ -59,16 +63,16 @@ dependencies:
       - tokenizers>=0.21.0
       - safetensors>=0.6.0
       
-#      # PyTorch (choose based on your hardware)
-#      # For CUDA 11.8 (GPU):
-#      - torch==2.1.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-#      - torchaudio==2.1.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-#      - torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+      # PyTorch (choose based on your hardware)
+      # For CUDA 11.8 (GPU):
+      - torch>=2.2.0 --index-url https://download.pytorch.org/whl/cu118
+      - torchaudio>=2.2.0 --index-url https://download.pytorch.org/whl/cu118
+      - torchvision>=0.17.0 --index-url https://download.pytorch.org/whl/cu118
       
-#      # For CPU only (comment out above and uncomment below):
-#       - torch>=2.1.0
-#       - torchaudio>=2.1.0
-#       - torchvision>=0.16.0
+      # For CPU only (comment out above and uncomment below):
+      # - torch>=2.2.0
+      # - torchaudio>=2.2.0
+      # - torchvision>=0.17.0
       
       # Optional: Additional ML/NLP tools
       - accelerate>=0.26.0

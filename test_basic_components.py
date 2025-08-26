@@ -1,12 +1,12 @@
 # test_basic_components.py
-from tools import ReviewSearchTool, SentimentSummaryTool, DataSummaryTool
+from tools_chromadb import ReviewSearchTool, SentimentSummaryTool, DataSummaryTool
 
 def test_basic_functionality():
     print("Testing basic components...")
     
     # Test search tool
     try:
-        search_tool = ReviewSearchTool("index_demo")
+        search_tool = ReviewSearchTool("./chroma_db")
         results = search_tool("service quality", k=3)
         print("✓ Search tool works")
         print(f"Found {len(results)} results")
@@ -27,7 +27,7 @@ def test_basic_functionality():
     
     # Test data tool
     try:
-        data_tool = DataSummaryTool("data/processed/review_cleaned.csv")
+        data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
         summary = data_tool()
         print("✓ Data tool works")
         print(f"Summary: {summary}")
