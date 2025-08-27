@@ -4,8 +4,9 @@ This project contains a business recommendation agent that can suggest businesse
 
 ## Available Versions
 
+- **ChromaDB Agent** (`demo2_chromadb.py`) - LangChain + ChromaDB vector search ✨ **RECOMMENDED**
+- **LangChain Agent** (`demo2_langchain.py`) - Enhanced version using LangChain framework  
 - **Original Agent** (`demo.py`, `demo2.py`) - Custom ReAct implementation
-- **LangChain Agent** (`demo2_langchain.py`) - Enhanced version using LangChain framework ✨ **NEW**
 
 ## Setup
 

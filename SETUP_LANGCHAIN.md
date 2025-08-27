@@ -97,20 +97,54 @@ python -c "import langchain; from langchain_agent import create_business_agent; 
 
 # Run the full demo
 python demo2_langchain.py
+
+# NEW: Run ChromaDB demo (with vector search)
+python demo_chromadb.py
 ```
+
+## ChromaDB Migration (NEW!)
+
+This project has been **upgraded** from custom FAISS to **ChromaDB + LangChain** integration:
+
+### Migration Steps
+```bash
+# 1. Migrate existing data to ChromaDB (one-time setup)
+python migrate_to_chromadb.py
+
+# 2. Test the new ChromaDB system
+python demo_chromadb.py
+
+# 3. Interactive mode with vector search
+python enhanced_chromadb_agent.py interactive
+```
+
+### Benefits of ChromaDB
+- 🔍 **Semantic Search**: Find relevant reviews by meaning, not just keywords
+- 💾 **Persistent Storage**: No need to rebuild index every time
+- 🔧 **Better Integration**: Native LangChain compatibility
+- 📊 **Metadata Filtering**: Filter by business, date, rating, etc.
+- 🚀 **Better Performance**: More efficient than custom FAISS implementation
 
 ## What the Demo Does
 
-The LangChain demo (`demo2_langchain.py`) showcases:
+The LangChain demo now includes **ChromaDB vector search** capabilities:
 
+### Legacy Demo (`demo2_langchain.py`)
 1. **Sentiment Analysis**: Analyzes the sentiment of business reviews
 2. **Data Summarization**: Provides statistical summaries of review data
 3. **LangChain Integration**: Shows how to use LangChain agents with custom tools
 
-Sample queries:
-- "What are people saying about service quality?"
-- "Analyze sentiment of reviews for business XQfwVwDr-v0ZS3_CbbE5Xw"
-- "Give me a summary of review statistics for business ID XQfwVwDr-v0ZS3_CbbE5Xw"
+### New ChromaDB Demo (`demo_chromadb.py` & `enhanced_chromadb_agent.py`)
+1. **🔍 Vector Search**: Find relevant reviews using semantic similarity
+2. **💬 RAG Question-Answering**: Answer complex questions using retrieved reviews
+3. **😊 Sentiment Analysis**: Analyze sentiment patterns in review texts
+4. **📊 Data Summaries**: Get statistical insights with filtering capabilities
+
+Sample queries for ChromaDB version:
+- "What do customers say about food quality?"
+- "Find reviews mentioning poor service and analyze sentiment"
+- "What are the main complaints customers have?"
+- "Give me statistics for business XQfwVwDr-v0ZS3_CbbE5Xw"
 
 ## Customization
 
