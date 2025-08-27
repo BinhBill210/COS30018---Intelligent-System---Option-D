@@ -1,7 +1,12 @@
 # agent.py (updated with debugging)
+
 from typing import List, Dict, Any, Callable
 import json
 import re
+# Import tools from the new tools folder
+from tools.review_search_tool import ReviewSearchTool
+from tools.sentiment_summary_tool import SentimentSummaryTool
+from tools.data_summary_tool import DataSummaryTool
 
 class Tool:
     def __init__(self, name: str, description: str, func: Callable):
@@ -109,3 +114,52 @@ IMPORTANT: Always respond in this exact format. Do not add any extra text outsid
                 prompt += f"\nObservation: {error_msg}\nAgent:"
         
         return "I'm sorry, I wasn't able to complete your request within the allowed iterations."
+
+# Demo example similar to langchain_agent_chromadb.py
+def main():
+    print("🚀 Custom Agent Demo with ChromaDB Tools")
+    print("=" * 50)
+
+    # Initialize tools
+    search_tool = Tool(
+        name="search_reviews",
+        description="Search for relevant reviews based on semantic similarity. Input should be a search query string.",
+        func=lambda query, k=5: ReviewSearchTool("./chroma_db")(query, k)
+    )
+    sentiment_tool = Tool(
+        name="analyze_sentiment",
+        description="Analyze sentiment of a list of reviews. Input should be a list of review texts.",
+        func=lambda reviews: SentimentSummaryTool()(reviews)
+    )
+    data_tool = Tool(
+        name="get_data_summary",
+        description="Get summary statistics for reviews. Optionally filter by business_id.",
+        func=lambda business_id=None: DataSummaryTool("data/processed/review_cleaned.parquet")(business_id)
+    )
+
+    tools = [search_tool, sentiment_tool, data_tool]
+
+    # Dummy LLM function for demonstration (replace with your LLM integration)
+    def dummy_llm_generate(prompt):
+        # For demo, always return a final answer
+        return "Thought: Do I need to use a tool? No\nFinal Answer: This is a demo response."
+
+    agent = Agent(tools=tools, max_iterations=3, verbose=True)
+
+    # Example queries
+    queries = [
+        "What are people saying about service quality?",
+        "Search for reviews about food quality and analyze their sentiment",
+        "Give me a summary of review statistics for business ID XQfwVwDr-v0ZS3_CbbE5Xw",
+        "Find reviews mentioning delivery issues"
+    ]
+
+    for i, query in enumerate(queries):
+        print(f"\n{'='*50}")
+        print(f"Query {i+1}: {query}")
+        print('='*50)
+        result = agent.run(query, dummy_llm_generate)
+        print(f"Agent Response: {result}")
+
+if __name__ == "__main__":
+    main()

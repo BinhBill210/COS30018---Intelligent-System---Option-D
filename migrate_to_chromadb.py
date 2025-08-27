@@ -33,7 +33,8 @@ def validate_data_file(data_path: str) -> bool:
     try:
         # Try loading a few rows to validate format
         if data_path.endswith('.parquet'):
-            df = pd.read_parquet(data_path, nrows=5)
+            df = pd.read_parquet(data_path)
+            df = df.head(5)
         else:
             df = pd.read_csv(data_path, nrows=5)
         

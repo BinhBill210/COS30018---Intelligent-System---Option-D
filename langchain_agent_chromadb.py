@@ -35,14 +35,15 @@ class LangChainLocalLLM(LLM):
 # 2. Convert tools to LangChain tools with ChromaDB support
 def create_langchain_tools_chromadb():
     """Convert tools to LangChain format using ChromaDB"""
-    from tools2 import SentimentSummaryTool, DataSummaryTool
-    from tools_chromadb import ReviewSearchTool
-    
+    from tools.review_search_tool import ReviewSearchTool
+    from tools.sentiment_summary_tool import SentimentSummaryTool
+    from tools.data_summary_tool import DataSummaryTool
+
     # Initialize tools
     search_tool = ReviewSearchTool("./chroma_db")  # ChromaDB search
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
-    
+
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
@@ -63,7 +64,7 @@ def create_langchain_tools_chromadb():
             func=lambda business_id=None: data_tool(business_id if business_id and business_id.strip() else None)
         )
     ]
-    
+
     return langchain_tools
 
 # 3. Create the LangChain agent with ChromaDB

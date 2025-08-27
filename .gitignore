@@ -102,7 +102,7 @@ dmypy.json
 # Data files - keep raw data but exclude processed files
 raw_data/*.json
 data/processed/
-logs/*.log
+
 
 # ChromaDB vector database (large files)
 chroma_db/

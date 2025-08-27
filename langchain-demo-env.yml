@@ -17,7 +17,7 @@ dependencies:
 
   # Essential data processing
   - pandas=2.3.*
-  - numpy>=2.0.*
+  - numpy=1.26.4
   - scipy=1.15.*
   - scikit-learn=1.7.*
   
@@ -63,17 +63,6 @@ dependencies:
       - tokenizers>=0.21.0
       - safetensors>=0.6.0
       
-      # PyTorch (choose based on your hardware)
-      # For CUDA 11.8 (GPU):
-      - torch>=2.2.0 --index-url https://download.pytorch.org/whl/cu118
-      - torchaudio>=2.2.0 --index-url https://download.pytorch.org/whl/cu118
-      - torchvision>=0.17.0 --index-url https://download.pytorch.org/whl/cu118
-      
-      # For CPU only (comment out above and uncomment below):
-      # - torch>=2.2.0
-      # - torchaudio>=2.2.0
-      # - torchvision>=0.17.0
-      
       # Optional: Additional ML/NLP tools
       - accelerate>=0.26.0
       - protobuf>=6.32.0
@@ -83,3 +72,4 @@ dependencies:
       
       # Environment management
       - python-dotenv>=1.1.0
+      - ijson>=3.4.0

@@ -1,101 +1,74 @@
-# Business Recommendation Agent
+# COS30018 Intelligent System - Option D
 
-This project contains a business recommendation agent that can suggest businesses based on user queries.
+## 🛠️ Environment Setup
 
-## Available Versions
-
-- **ChromaDB Agent** (`demo2_chromadb.py`) - LangChain + ChromaDB vector search ✨ **RECOMMENDED**
-- **LangChain Agent** (`demo2_langchain.py`) - Enhanced version using LangChain framework  
-- **Original Agent** (`demo.py`, `demo2.py`) - Custom ReAct implementation
-
-## Setup
-
-There are two main parts of this project: data preprocessing and running the agent.
-
-### For Data Preprocessing
-
-If you want to preprocess the data from scratch, follow these steps.
-
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements-minimal.txt
-   ```
-2. **Run the preprocessing script:**
-   This will clean the raw data. The output will be in `data/processed`.
-   ```bash
-   python scripts/run_preprocessing.py
-   ```
-3. **Build the search index:**
-   This will create an index from the processed data for the search tool.
-   ```bash
-   python build_index_from_csv.py
-   ```
-
-### For Running the Agent
-
-If you want to run the agent with preprocessed data and a pre-built index, follow these steps.
-
-1. **Download pre-built data and index:**
-
-   * Download the `index_demo` folder from [Google Drive](https://drive.google.com/drive/folders/1Y4gnvplLDlb5-wxB2W3M4QbQFi8mhrWL?usp=sharing) and place it in the project root.
-   * Download the `processed` data folder from [Google Drive](https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing) and place it inside the `data/processed` folder.
-2. **Create and activate Conda environment:**
-
-   ```bash
-   conda env create -f another_env.yml
-   conda activate biz-agent-gpu-2
-   ```
-3. **Download language model:**
-
-   ```bash
-   python -m spacy download en_core_web_sm
-   ```
-4. **(Optional) For NVIDIA GPU users:**
-   If you have a CUDA-enabled GPU, install the appropriate PyTorch version:
-
-   ```bash
-   pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
-   ```
-5. **Run the demo:**
-
-   ```bash
-   python demo2.py
-   ```
-
-### For LangChain Agent (Recommended) ✨
-
-The LangChain version provides enhanced capabilities and better error handling:
-
-#### Quick Start
-
-1. **Download data** (same as above):
-   * Download the `processed` data folder from [Google Drive](https://drive.google.com/drive/folders/1n2D1Cq0MhgSDKI55GOGQ4btO1p_A4RzV?usp=sharing) and place it inside the `data` folder.
-
-2. **Create environment** (choose one):
-
-   **For GPU users:**
+1. **Install Anaconda Environment**
    ```bash
    conda env create -f langchain-demo-env.yml
-   conda activate langchain-demo
    ```
+   For NVIDIA GPUs with CUDA support, install PyTorch according to your CUDA version:
+   - Visit [PyTorch Get Started](https://pytorch.org/get-started/locally/) for instructions.
 
-   **For CPU-only users:**
-   ```bash
-   conda env create -f langchain-demo-cpu.yml
-   conda activate langchain-demo-cpu
-   ```
+---
 
-3. **Run the LangChain demo:**
-   ```bash
-   python demo2_langchain.py
-   ```
+## 📦 Data Preprocessing
 
-#### Features
-- 🔧 **Better Tool Integration**: Proper schema validation and error handling
-- 🧠 **Memory Management**: Conversation memory for multi-turn interactions  
-- 📊 **Enhanced Monitoring**: Detailed execution logging and debugging
-- 🔄 **Robust Architecture**: Battle-tested LangChain framework
-- ⚡ **Performance**: Optimized execution with fallback options
+- Run preprocessing from the project root:
+  ```bash
+  python scripts/run_preprocessing.py
+  ```
+- For argument details:
+  ```bash
+  python scripts/run_preprocessing.py --help
+  ```
+- **Alternative:**
+  - Download the `data` folder from [Google Drive](https://drive.google.com/drive/u/0/folders/1enrB0_dKmCJG62NjTBqRG_pZF76Xv4z9) and place it in the project root.
 
-#### Troubleshooting
-For detailed setup instructions and troubleshooting, see [SETUP_LANGCHAIN.md](SETUP_LANGCHAIN.md).
+---
+
+## 🔗 Review Embeddings
+
+- Run embedding migration:
+  ```bash
+  python migrate_to_chromadb.py
+  ```
+- **Alternative:**
+  - Download the `chroma_db` folder from [Google Drive](https://drive.google.com/drive/u/0/folders/1enrB0_dKmCJG62NjTBqRG_pZF76Xv4z9) and place it in the project root.
+
+---
+
+## 🧪 Tool Testing
+
+- Run individual tool tests or all tests:
+  - **Recommended:** Run all tests as a module to avoid Python path issues:
+    ```bash
+    python -m test.run_all_tests
+    ```
+  - Or run individual tests:
+    ```bash
+    python -m test.test_review_search_tool
+    python -m test.test_sentiment_summary_tool
+    python -m test.test_data_summary_tool
+    ```
+
+---
+
+## 🤖 Model Demo
+
+- Run the LangChain agent demo:
+  ```bash
+  python langchain_agent_chromadb.py
+  ```
+  This will show example queries and responses using the integrated tools and ChromaDB backend.
+
+---
+
+## 📚 Additional Notes
+
+- Ensure you run all commands from the project root directory.
+- For troubleshooting Python import errors, always use the `-m` module syntax for tests.
+- For GPU acceleration, confirm your CUDA version and install compatible PyTorch.
+
+---
+
+**For more details, see the main `readme.md` and setup guides in the repository.**

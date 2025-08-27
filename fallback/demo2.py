@@ -1,24 +1,32 @@
 # demo.py (updated)
 from agent import Agent, Tool
-from tools2 import SentimentSummaryTool, DataSummaryTool
+from tools.review_search_tool import ReviewSearchTool
+from tools.sentiment_summary_tool import SentimentSummaryTool
+from tools.data_summary_tool import DataSummaryTool
 from local_llm import LocalLLM
 
 def setup_agent():
     # Initialize tools
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.csv")
-    
+    search_tool = ReviewSearchTool("./chroma_db")
+
     # Create tool wrappers
     tools = [
         Tool(
             name="analyze_sentiment",
-            description="Analyze sentiment of a list of reviews. Input: {'reviews': ['review1', 'review2']}",
+            description="Analyze sentiment of a list of reviews. Input should be a list of review texts separated by '|'.",
             func=sentiment_tool
         ),
         Tool(
             name="get_data_summary",
-            description="Get summary statistics for reviews. Input: {'business_id': 'optional business id'}",
+            description="Get summary statistics for reviews. Optional input should be business ID",
             func=data_tool
+        ),
+        Tool(
+            name="search_reviews",
+            description="Search for relevant reviews based on semantic similarity. Input should be a search query string.",
+            func=search_tool
         )
     ]
     
@@ -36,8 +44,9 @@ def main():
     # Demo queries
     queries = [
         "What are people saying about service quality?",
-        "Analyze sentiment of reviews for business XQfwVwDr-v0ZS3_CbbE5Xw",
-        "Give me a summary of review statistics for business ID XQfwVwDr-v0ZS3_CbbE5Xw"
+        "Search for reviews about food quality and analyze their sentiment",
+        "Give me a summary of review statistics for business ID XQfwVwDr-v0ZS3_CbbE5Xw",
+        "Find reviews mentioning delivery issues"
     ]
     
     for i, query in enumerate(queries):
