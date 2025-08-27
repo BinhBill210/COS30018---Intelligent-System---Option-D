@@ -1,4 +1,0 @@
-Yes, that is a reference to Clair Obscur: Expedition 33
-
-
-đọc kĩ readme.md để setup env
