@@ -39,7 +39,7 @@ dependencies:
   - tqdm=4.67.*
   
   # macOS-specific optimizations
-  - libomp  # OpenMP for better performance on macOS
+  - llvm-openmp  # OpenMP for better performance on macOS (formerly libomp)
   
   # Development tools
   - pip
