@@ -1,0 +1,53 @@
+# example_t2_usage.py
+import sys
+import os
+
+# Add current directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from tools.t2_business_pulse import BusinessPulse
+
+def demo_t2_business_pulse():
+    """Demonstrate T2 BusinessPulse tool with automated sentiment analysis."""
+    
+    print("=== T2 BusinessPulse Demo with Automated Sentiment ===")
+    
+    # Initialize the tool with automated sentiment analysis
+    business_pulse = BusinessPulse(
+        data_path="data/processed/review_cleaned.csv",
+        use_advanced_sentiment=True  # Use transformer-based sentiment
+    )
+    
+    # Example 1: Basic business health check
+    print("\n=== Example 1: Business Health Overview ===")
+    results1 = business_pulse(business_id="XQfwVwDr-v0ZS3_CbbE5Xw")
+    
+    print(f"Business Reviews: {results1['summary']['n_reviews']}")
+    print(f"Star Distribution: {results1['summary']['stars_dist']}")
+    print(f"Automated Sentiment: {results1['text_sentiment']}")
+    print(f"Processing time: {results1['meta']['elapsed_ms']}ms")
+    
+    # Example 2: Automated term extraction
+    print("\n=== Example 2: Automated Term Analysis ===")
+    print(f"Top Positive Terms: {results1['top_positive_terms']}")
+    print(f"Top Negative Terms: {results1['top_negative_terms']}")
+    
+    # Example 3: Consistency analysis with automated sentiment
+    print("\n=== Example 3: Automated Consistency Check ===")
+    mismatch_pct = results1['consistency_check']['star_vs_text_mismatch_pct']
+    print(f"Star vs Automated Sentiment Mismatch: {mismatch_pct * 100:.1f}%")
+    
+    if mismatch_pct > 0.1:
+        print("⚠️ High mismatch detected - potential review authenticity issues")
+    else:
+        print("✅ Good consistency between ratings and automated sentiment analysis")
+    
+    # Example 4: Evidence with helpfulness ranking
+    print("\n=== Example 4: Top Evidence (by Helpfulness) ===")
+    for i, evidence in enumerate(results1['evidence'][:2], 1):
+        print(f"Evidence {i} (★{evidence['stars']}, helpfulness: {evidence['helpfulness']}):")
+        print(f"  \"{evidence['quote']}\"")
+        print(f"  Date: {evidence['date']}")
+
+if __name__ == "__main__":
+    demo_t2_business_pulse()
