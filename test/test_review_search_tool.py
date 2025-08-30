@@ -2,9 +2,9 @@ from tools.review_search_tool import ReviewSearchTool
 
 def test_review_search_tool():
     print("Testing ReviewSearchTool...")
-    search_tool = ReviewSearchTool("../chroma_db")
+    search_tool = ReviewSearchTool("./chroma_db")
     query = "service quality"
-    results = search_tool(query, k=3)
+    results = search_tool(query, k=10)
     print(f"Query: {query}")
     print(f"Found {len(results)} results")
     for i, result in enumerate(results, 1):
