@@ -47,9 +47,12 @@ def create_langchain_tools_chromadb():
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
-            name="search_reviews",
-            description="Search for relevant reviews based on semantic similarity. Input should be a search query string.",
-            func=lambda query: search_tool(query, k=5)
+        name="search_reviews",
+        description="Search for relevant reviews based on semantic similarity. Input can be a string (query) or a dictionary with 'query' and optional 'k'.",
+        func=lambda input: (
+            search_tool(input, k=5) if isinstance(input, str)
+            else search_tool(input.get("query", ""), k=input.get("k", 5))
+            )
         ),
         LangChainTool(
             name="analyze_sentiment",
