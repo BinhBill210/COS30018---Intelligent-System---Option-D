@@ -73,3 +73,4 @@ dependencies:
       # Environment management
       - python-dotenv>=1.1.0
       - ijson>=3.4.0
+      - streamlit
