@@ -69,7 +69,7 @@ class LocalLLM:
             
             # Set generation config
             self.generation_config = GenerationConfig(
-                temperature=0.7,
+                temperature=0.1,
                 top_p=0.9,
                 top_k=50,
                 repetition_penalty=1.1,

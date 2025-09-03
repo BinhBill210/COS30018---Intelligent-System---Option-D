@@ -76,4 +76,5 @@ dependencies:
       
       # macOS-specific packages for better Metal Performance Shaders support (Apple Silicon)
       - torch>=2.0.0  # PyTorch with MPS support for Apple Silicon
+      - rapidfuzz
       - streamlit

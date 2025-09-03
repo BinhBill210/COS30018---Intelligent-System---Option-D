@@ -38,20 +38,22 @@ def create_langchain_tools_chromadb():
     from tools.review_search_tool import ReviewSearchTool
     from tools.sentiment_summary_tool import SentimentSummaryTool
     from tools.data_summary_tool import DataSummaryTool
+    from tools.business_search_tool import BusinessSearchTool
 
     # Initialize tools
     search_tool = ReviewSearchTool("./chroma_db")  # ChromaDB search
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
+    business_tool = BusinessSearchTool("data/processed/business_cleaned.csv", "./business_chroma_db")
 
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
-        name="search_reviews",
-        description="Search for relevant reviews based on semantic similarity. Input can be a string (query) or a dictionary with 'query' and optional 'k'.",
-        func=lambda input: (
-            search_tool(input, k=5) if isinstance(input, str)
-            else search_tool(input.get("query", ""), k=input.get("k", 5))
+            name="search_reviews",
+            description="Search for relevant reviews based on semantic similarity. Input can be a string (query) and optional 'k'.",
+            func=lambda input: (
+                search_tool(input, k=5) if isinstance(input, str)
+                else search_tool(input.get("query", ""), k=input.get("k", 5))
             )
         ),
         LangChainTool(
@@ -65,6 +67,24 @@ def create_langchain_tools_chromadb():
             name="get_data_summary",
             description="Get summary statistics for reviews. Optionally filter by business_id.",
             func=lambda business_id=None: data_tool(business_id if business_id and business_id.strip() else None)
+        ),
+        LangChainTool(
+            name="get_business_id",
+            description="Get the business_id for a given business name (exact match). Input should be a string (business name).",
+            func=lambda name: business_tool.get_business_id(name)
+        ),
+        LangChainTool(
+            name="search_businesses",
+            description="Semantic search for businesses. Input should be a string (query/description) or a dict with 'query' and optional 'k'.",
+            func=lambda input: (
+                business_tool.search_businesses(input, k=5) if isinstance(input, str)
+                else business_tool.search_businesses(input.get("query", ""), k=input.get("k", 5))
+            )
+        ),
+        LangChainTool(
+            name="get_business_info",
+            description="Get general info for a business_id. Input should be a string (business_id).",
+            func=lambda business_id: business_tool.get_business_info(business_id)
         )
     ]
 
@@ -85,8 +105,8 @@ def create_business_agent_chromadb():
     
     # Create custom prompt template for ReAct pattern
     react_prompt = PromptTemplate.from_template("""
-You are a business review analysis agent with access to a vector database of reviews.
-You can search for relevant reviews, analyze sentiment, and provide data summaries.
+You are a business review analysis agent with access to a vector database of reviews and business information.
+You can search for relevant reviews, analyze sentiment, provide data summaries, and answer questions about businesses.
 
 TOOLS:
 ------
@@ -94,19 +114,23 @@ You have access to the following tools:
 
 {tools}
 
-To use a tool, please use the following format:
+When reasoning, carefully consider which tool(s) are most appropriate for the user's query. You may use more than one tool in a single turn if needed to answer complex questions. For example, you may need to look up a business ID before searching reviews, or combine results from multiple tools.
+
+To use a tool, use the following format for each tool you use:
 
 ```
-Thought: Do I need to use a tool? Yes
+Thought: [Your reasoning about which tool(s) to use and why]
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
 Observation: the result of the action
 ```
 
+If you need to use multiple tools, repeat the Action/Action Input/Observation block for each tool, and update your Thought after each Observation.
+
 When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
 
 ```
-Thought: Do I need to use a tool? No
+Thought: [Your reasoning about why no further tools are needed]
 Final Answer: [your response here]
 ```
 
@@ -114,6 +138,9 @@ Available capabilities:
 - 🔍 search_reviews: Find relevant reviews using semantic similarity (powered by ChromaDB)
 - 😊 analyze_sentiment: Analyze sentiment patterns in review texts
 - 📊 get_data_summary: Get statistical summaries of review data
+- 🏢 get_business_id: Get the business_id for a given business name
+- 🏢 search_businesses: Semantic search for businesses by description or name
+- 🏢 get_business_info: Get general info for a business_id
 
 Begin!
 

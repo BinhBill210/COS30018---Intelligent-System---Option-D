@@ -106,6 +106,7 @@ data/processed/
 
 # ChromaDB vector database (large files)
 chroma_db/
+business_chroma_db/
 *.chroma
 
 # Old FAISS index files (if any remain)
