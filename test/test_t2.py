@@ -2,10 +2,11 @@
 import sys
 import os
 
-# Add current directory to Python path
+# Add current directory and parent directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.t2_business_pulse import BusinessPulse
+from tools.t2_business_pulse import BusinessPulseChromaDB as BusinessPulse
 
 def demo_t2_business_pulse():
     """Demonstrate T2 BusinessPulse tool with automated sentiment analysis."""
@@ -14,7 +15,7 @@ def demo_t2_business_pulse():
     
     # Initialize the tool with automated sentiment analysis
     business_pulse = BusinessPulse(
-        data_path="data/processed/review_cleaned.csv",
+        chroma_path="./chroma_db",
         use_advanced_sentiment=True  # Use transformer-based sentiment
     )
     
