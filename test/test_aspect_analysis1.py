@@ -1,21 +1,34 @@
-# test/test_aspect_analysis.py
-from tools.aspect_analysis1 import AspectABSATool
 
+import json
+import sys
+from tools.AspectAnalysis import AspectABSAToolHF
 
 def test_aspect_absa_tool():
-    print("Testing AspectABSATool...")
-    tool = AspectABSATool("./chroma_db")
+    print("Testing AspectABSAToolHF...")
 
-    # Test with a business_id you know exists in your ChromaDB
-    business_id = "XQfwVwDr-v0ZS3_CbbE5Xw"
-    result = tool(business_id=business_id)
+ 
+    business_id ="XQfwVwDr-v0ZS3_CbbE5Xw"
+    print(f"- business_id: {business_id}")
 
-    print(f"Business ID: {business_id}")
-    print("Output:")
-    print(result)
+    tool = AspectABSAToolHF(
+        business_data_path="data/processed/business_cleaned.parquet",
+        review_data_path="data/processed/review_cleaned.parquet",
+    )
 
-    # Simple check
-    return result is not None and "aspects" in result
+    reviews = tool.read_data(business_id=business_id)
+    print(f"- Loaded {len(reviews)} reviews")
+
+    result = tool.analyze_aspects(reviews)
+    aspects = result.get("aspects", {})
+
+   
+    print("Output (aspects):")
+    print(json.dumps(aspects, ensure_ascii=False, indent=2))
+
+    # condition pass: has at least 1 aspect
+    ok = isinstance(aspects, dict) and len(aspects) > 0
+    print(f"Test passed: {ok}")
+    return ok
 
 if __name__ == "__main__":
     test_aspect_absa_tool()
