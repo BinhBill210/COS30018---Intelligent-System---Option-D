@@ -1,30 +1,34 @@
-import pandas as pd
-from pathlib import Path
-import tempfile
-from tools.aspect_analysis import AspectABSAToolParquet
 
-def test_aspect_absa_tool_parquet(tmp_path):
-    print("Testing AspectABSAToolParquet with a sample parquet file...")
+import json
+import sys
+from tools.aspect_analysis import AspectABSAToolHF
 
-    # Create a tiny DataFrame with a few reviews
-    df = pd.DataFrame({
-        "text": [
-            "The pizza was amazing but delivery was late",
-            "Service was friendly and quick",
-            "Overpriced for the portion size"
-        ]
-    })
+def test_aspect_absa_tool():
+    print("Testing AspectABSAToolHF...")
 
-    # Save to a temporary parquet file
-    parquet_file = tmp_path / "sample_reviews.parquet"
-    df.to_parquet(parquet_file, engine="pyarrow")
+ 
+    business_id ="XQfwVwDr-v0ZS3_CbbE5Xw"
+    print(f"- business_id: {business_id}")
 
-    tool = AspectABSAToolParquet()
-    result = tool(str(parquet_file))
+    tool = AspectABSAToolHF(
+        business_data_path="data/processed/business_cleaned.parquet",
+        review_data_path="data/processed/review_cleaned.parquet",
+    )
 
-    print(f"Output: {result}")
-    assert result is not None and "aspects" in result
+    reviews = tool.read_data(business_id=business_id)
+    print(f"- Loaded {len(reviews)} reviews")
+
+    result = tool.analyze_aspects(reviews)
+    aspects = result.get("aspects", {})
+
+   
+    print("Output (aspects):")
+    print(json.dumps(aspects, ensure_ascii=False, indent=2))
+
+    # condition pass: has at least 1 aspect
+    ok = isinstance(aspects, dict) and len(aspects) > 0
+    print(f"Test passed: {ok}")
+    return ok
 
 if __name__ == "__main__":
-    with tempfile.TemporaryDirectory() as tmp:
-        test_aspect_absa_tool_parquet(tmp_path=Path(tmp))
+    test_aspect_absa_tool()
