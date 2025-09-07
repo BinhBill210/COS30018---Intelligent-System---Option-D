@@ -6,7 +6,7 @@ from local_llm import LocalLLM
 
 
 def setup_agent():
-    # Initialize tools
+    # Initialize review and sentiment tools
     search_tool = Tool(
         name="search_reviews",
         description="Search for relevant reviews based on semantic similarity. Input should be a search query string.",
@@ -22,7 +22,35 @@ def setup_agent():
         description="Get summary statistics for reviews. Optionally filter by business_id.",
         func=lambda business_id=None: DataSummaryTool("data/processed/review_cleaned.parquet")(business_id)
     )
-    tools = [search_tool, sentiment_tool, data_tool]
+
+    # Add business tools
+    from tools.business_search_tool import BusinessSearchTool
+    business_tool = BusinessSearchTool("data/processed/business_cleaned.csv", "./business_chroma_db")
+
+    get_business_id_tool = Tool(
+        name="get_business_id",
+        description="Get the business_id for a given business name (exact match). Input should be a string (business name).",
+        func=lambda name: business_tool.get_business_id(name)
+    )
+    search_businesses_tool = Tool(
+        name="search_businesses",
+        description="Semantic search for businesses. Input should be a string (query/description) and optional 'k'.",
+        func=lambda input, k=5: business_tool.search_businesses(input, k)
+    )
+    get_business_info_tool = Tool(
+        name="get_business_info",
+        description="Get general info for a business_id. Input should be a string (business_id).",
+        func=lambda business_id: business_tool.get_business_info(business_id)
+    )
+
+    tools = [
+        search_tool,
+        sentiment_tool,
+        data_tool,
+        get_business_id_tool,
+        search_businesses_tool,
+        get_business_info_tool
+    ]
     llm = LocalLLM(use_4bit=False)
     agent = Agent(tools=tools, max_iterations=5, verbose=True)
     return agent, llm.generate

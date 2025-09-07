@@ -40,7 +40,7 @@ Available tools:
 When you need to use a tool, respond in the following format:
 Thought: [Your reasoning about what to do next]
 Action: [Tool Name]
-Action Input: [JSON input for the tool]
+Action Input: depends on the description of the tool that will have different input, if it is a string, remember to put them in " " after action input
 
 When you have a final answer, respond with:
 Final Answer: [Your final response to the user]
@@ -137,7 +137,34 @@ def main():
         func=lambda business_id=None: DataSummaryTool("data/processed/review_cleaned.parquet")(business_id)
     )
 
-    tools = [search_tool, sentiment_tool, data_tool]
+    # Add business tools
+    from tools.business_search_tool import BusinessSearchTool
+    business_tool = BusinessSearchTool("data/processed/business_cleaned.csv", "./business_chroma_db")
+
+    get_business_id_tool = Tool(
+        name="get_business_id",
+        description="Get the business_id for a given business name (exact match). Input should be a string (business name).",
+        func=lambda name: business_tool.get_business_id(name)
+    )
+    search_businesses_tool = Tool(
+        name="search_businesses",
+        description="Semantic search for businesses. Input should be a string (query/description) or a dict with 'query' and optional 'k'.",
+        func=lambda input, k=5: business_tool.search_businesses(input, k)
+    )
+    get_business_info_tool = Tool(
+        name="get_business_info",
+        description="Get general info for a business_id. Input should be a string (business_id).",
+        func=lambda business_id: business_tool.get_business_info(business_id)
+    )
+
+    tools = [
+        search_tool,
+        sentiment_tool,
+        data_tool,
+        get_business_id_tool,
+        search_businesses_tool,
+        get_business_info_tool
+    ]
 
     # Dummy LLM function for demonstration (replace with your LLM integration)
     def dummy_llm_generate(prompt):

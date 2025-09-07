@@ -52,39 +52,55 @@ def create_langchain_tools_chromadb():
             name="search_reviews",
             description="Search for relevant reviews based on semantic similarity. Input can be a string (query) and optional 'k'.",
             func=lambda input: (
-                search_tool(input, k=5) if isinstance(input, str)
-                else search_tool(input.get("query", ""), k=input.get("k", 5))
+                print(f"[TOOL CALLED] search_reviews with input: {input}") or
+                (search_tool(input, k=5) if isinstance(input, str)
+                else search_tool(input.get("query", ""), k=input.get("k", 5)))
             )
         ),
         LangChainTool(
             name="analyze_sentiment",
             description="Analyze sentiment of a list of reviews. Input should be a list of review texts separated by '|'.",
-            func=lambda reviews_input: sentiment_tool(
-                reviews_input.split('|') if isinstance(reviews_input, str) and '|' in reviews_input else [reviews_input]
+            func=lambda reviews_input: (
+                print(f"[TOOL CALLED] analyze_sentiment with input: {reviews_input}") or
+                sentiment_tool(
+                    reviews_input.split('|') if isinstance(reviews_input, str) and '|' in reviews_input else [reviews_input]
+                )
             )
         ),
         LangChainTool(
             name="get_data_summary",
             description="Get summary statistics for reviews. Optionally filter by business_id.",
-            func=lambda business_id=None: data_tool(business_id if business_id and business_id.strip() else None)
+            func=lambda business_id=None: (
+                print(f"[TOOL CALLED] get_data_summary with input: {business_id}") or
+                data_tool(business_id if business_id and business_id.strip() else None)
+            )
         ),
         LangChainTool(
             name="get_business_id",
             description="Get the business_id for a given business name (exact match). Input should be a string (business name).",
-            func=lambda name: business_tool.get_business_id(name)
+            func=lambda name: (
+                print(f"[TOOL CALLED] get_business_id with input: {name}") or
+                business_tool.get_business_id(name)
+            )
         ),
         LangChainTool(
             name="search_businesses",
             description="Semantic search for businesses. Input should be a string (query/description) or a dict with 'query' and optional 'k'.",
             func=lambda input: (
-                business_tool.search_businesses(input, k=5) if isinstance(input, str)
-                else business_tool.search_businesses(input.get("query", ""), k=input.get("k", 5))
+                print(f"[TOOL CALLED] search_businesses with input: {input}") or
+                (business_tool.search_businesses(input, k=5) if isinstance(input, str)
+                else business_tool.search_businesses(input.get("query", ""), k=input.get("k", 5)))
             )
         ),
         LangChainTool(
             name="get_business_info",
             description="Get general info for a business_id. Input should be a string (business_id).",
-            func=lambda business_id: business_tool.get_business_info(business_id)
+            func=lambda input: (
+                print(f"[TOOL CALLED] get_business_info with input: {input}") or
+                business_tool.get_business_info(
+                    input if isinstance(input, str) else input.get("business_id", "")
+                )
+            )
         )
     ]
 
@@ -114,18 +130,30 @@ You have access to the following tools:
 
 {tools}
 
-When reasoning, carefully consider which tool(s) are most appropriate for the user's query. You may use more than one tool in a single turn if needed to answer complex questions. For example, you may need to look up a business ID before searching reviews, or combine results from multiple tools.
+STRICT TOOL INPUT FORMATS:
+You must use the exact input format for each tool below. Do not invent or guess formats. If you are unsure, do not use the tool.
+
+- search_reviews: Input must be a string (query) or a dict with 'query' (string) and optional 'k' (int). Example: "Find reviews about pizza" or {{{{"query": "pizza", "k": 5}}}}
+- analyze_sentiment: Input must be a string of review texts separated by '|'. Example: "Great food|Bad service|Nice ambiance"
+- get_data_summary: Input must be a string (business_id) or None. 
+- get_business_id: Input must be a string (business name). 
+- search_businesses: Input must be a string (query/description) or a dict with 'query' (string) and optional 'k' (int). Example: "vegan restaurant" or {{{{"query": "vegan restaurant", "k": 5}}}}
+- get_business_info: Input must be a string (business_id). 
+
+You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
+
+REASONING AND OUTPUT:
+You must only reason based on the actual output (Observation) from the tools. Do not hallucinate, invent, or assume information that is not present in the tool output. If the tool output is empty, say so. If the tool output is unclear, do not guess.
 
 To use a tool, use the following format for each tool you use:
 
 ```
 Thought: [Your reasoning about which tool(s) to use and why]
 Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
+Action Input: the input to the action (strictly follow the required format above)
 ```
 
-If you need to use multiple tools, repeat the Action/Action Input/Observation block for each tool, and update your Thought after each Observation.
+If you need to use multiple tools, repeat the Thought/Action/Action Input block for each tool, and update your Thought after each Observation.
 
 When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
 
