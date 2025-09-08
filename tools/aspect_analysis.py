@@ -2,7 +2,6 @@ from typing import List, Optional, Dict, Any
 import pandas as pd
 from transformers import pipeline
 
-
 class AspectABSAToolHF:
     def __init__(
         self,
@@ -34,15 +33,42 @@ class AspectABSAToolHF:
         Return: List[{"review_id","text","business_id"}]
         """
         df = self.review_df
+
+        # Normalize dtypes/whitespace once before filtering
+        if "business_id" in df.columns:
+            df = df.copy()  # avoid SettingWithCopy
+            df["business_id"] = df["business_id"].astype(str).str.strip()
+        if "review_id" in df.columns:
+            df["review_id"] = df["review_id"].astype(str).str.strip()
+
         if business_id is not None:
-            df = df[df["business_id"] == business_id]
+            bid = str(business_id).strip()
+            before = len(df)
+            df = df[df["business_id"] == bid]
+            print(f"[DEBUG] read_data: filtered {len(df)}/{before} rows for business_id='{bid}'")
+        else:
+            print(f"[DEBUG] read_data: no business_id provided, returning all {len(df)} rows")
 
         out: List[Dict[str, Any]] = []
+        if df.empty:
+            return out
+
+        # choose a text column
+        text_col = None
+        for c in ("text", "review_text", "content", "body", "text_clean"):
+            if c in df.columns:
+                text_col = c
+                break
+        if text_col is None:
+            print(f"[WARN] read_data: no text-like column found in columns={list(df.columns)}")
+            return out
+
         for _, row in df.iterrows():
+            t = row.get(text_col, "")
             out.append(
                 {
                     "review_id": str(row.get("review_id", "")),
-                    "text": str(row.get("text", "")) if row.get("text", "") is not None else "",
+                    "text": "" if t is None else str(t),
                     "business_id": row.get("business_id", None),
                 }
             )
@@ -60,6 +86,10 @@ class AspectABSAToolHF:
         """
         if not reviews:
             return {"aspects": {}, "representative_snippets": {}, "evidence": {}}
+        
+        MAX_ASPECTS   = 10
+        MAX_EVIDENCE  = 1
+        
 
         aspects: Dict[str, Dict[str, float]] = {}
         representative_snippets: Dict[str, List[str]] = {}
@@ -77,7 +107,7 @@ class AspectABSAToolHF:
             ents = self.pipe(text)  # [{'entity_group':'pos/neg/neu','score':..,'word':..}, ...]
             for ent in ents:
                 asp = (ent.get("word") or "").lower().strip()
-                if not asp:
+                if not asp or len(asp) < 2: #delete the aspect that only have 1 or 2 words
                     continue
 
                 label = (ent.get("entity_group") or "").lower()  # 'pos'|'neg'|'neu'
@@ -105,7 +135,8 @@ class AspectABSAToolHF:
                 if len(representative_snippets[asp]) < 5:
                     representative_snippets[asp].append(text)
 
-                evidence[asp].append({"review": text, "score": ev_score, "id": rid})
+                if len(evidence[asp]) < MAX_EVIDENCE:
+                    evidence[asp].append({"review": text, "score": ev_score, "id": rid})
 
         for asp in sums:
             neg_c = counts[asp]["negative"]
@@ -116,10 +147,13 @@ class AspectABSAToolHF:
                 "neutral": round(sums[asp]["neutral"] / neu_c, 1) if neu_c else 0.0,
                 "positive": round(sums[asp]["positive"] / pos_c, 1) if pos_c else 0.0,
             }
-
+        kept_aspects = list(evidence.keys())[:MAX_ASPECTS]
+        evidence = {a: evidence[a][:MAX_EVIDENCE] for a in kept_aspects}
+        representative_snippets = {a: representative_snippets.get(a, [])[:5] for a in kept_aspects}
+        aspects = {a: aspects[a] for a in kept_aspects}
+        
         return {
             "aspects": aspects,
             "representative_snippets": representative_snippets,
             "evidence": evidence,
         }
-
