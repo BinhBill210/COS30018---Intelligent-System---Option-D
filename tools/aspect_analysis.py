@@ -21,18 +21,17 @@ class AspectABSAToolHF:
             else pd.read_csv(review_data_path)
         )
 
-        # HF ATE + sentiment pipeline (POS/NEG/NEU)
+        # Implement model pipeline
         self.pipe = pipeline(
             task="ner",
             model="gauneg/deberta-v3-base-absa-ate-sentiment",
             aggregation_strategy="simple",
         )
 
-    # 1) Lấy dữ liệu review theo business_id
+    # Take reviews from 1 business id
     def read_data(self, business_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Trả về: List[{"review_id","text","business_id"}]
-        Yêu cầu cột tối thiểu trong review_df: review_id, business_id, text
+        Return: List[{"review_id","text","business_id"}]
         """
         df = self.review_df
         if business_id is not None:
@@ -49,7 +48,7 @@ class AspectABSAToolHF:
             )
         return out
 
-    # 2) Phân tích & format output giống tool cũ
+    # Analyze aspects
     def analyze_aspects(self, reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Output:
@@ -124,9 +123,3 @@ class AspectABSAToolHF:
             "evidence": evidence,
         }
 
-
-# --- Ví dụ dùng ---
-# tool = AspectABSAToolHF()
-# reviews = tool.read_data(business_id="pizza_123")
-# result = tool.analyze_aspects(reviews)
-# print(result)
