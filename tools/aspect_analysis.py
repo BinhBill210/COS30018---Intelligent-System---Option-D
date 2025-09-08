@@ -147,7 +147,7 @@ class AspectABSAToolHF:
                 "neutral": round(sums[asp]["neutral"] / neu_c, 1) if neu_c else 0.0,
                 "positive": round(sums[asp]["positive"] / pos_c, 1) if pos_c else 0.0,
             }
-        #keep only 10 aspects and 1 evidence for 1 aspect
+        #keep only 10 aspects and 1 evidence for 1 aspect which minimize the output
         kept_aspects = list(evidence.keys())[:MAX_ASPECTS]
         evidence = {a: evidence[a][:MAX_EVIDENCE] for a in kept_aspects}
         representative_snippets = {a: representative_snippets.get(a, [])[:5] for a in kept_aspects}

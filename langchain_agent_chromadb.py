@@ -6,6 +6,7 @@ from langchain.llms.base import LLM
 from typing import Any, List, Mapping, Optional
 from local_llm import LocalLLM
 import torch
+import json
 
 # 1. Create a LangChain-compatible LLM wrapper (same as before)
 class LangChainLocalLLM(LLM):
@@ -39,13 +40,15 @@ def create_langchain_tools_chromadb():
     from tools.sentiment_summary_tool import SentimentSummaryTool
     from tools.data_summary_tool import DataSummaryTool
     from tools.business_search_tool import BusinessSearchTool
+    from tools.aspect_analysis import AspectABSAToolHF
+    
 
     # Initialize tools
     search_tool = ReviewSearchTool("./chroma_db")  # ChromaDB search
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
     business_tool = BusinessSearchTool("data/processed/business_cleaned.csv", "./business_chroma_db")
-
+    aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
@@ -101,7 +104,22 @@ def create_langchain_tools_chromadb():
                     input if isinstance(input, str) else input.get("business_id", "")
                 )
             )
+        ),
+        LangChainTool(
+            name="analyze_aspects",
+            description="Analyze aspects for a business_id. Input should plain business_id string, no JSON.",
+            func=lambda input: (
+                print(f"[TOOL CALLED] analyze_aspects with input: {input}") or
+                (lambda bid: aspect_tool.analyze_aspects(aspect_tool.read_data(business_id=bid)))(
+                    (json.loads(input).get("business_id")
+                    if isinstance(input, str) and input.strip().startswith("{")
+                    else str(input).strip())
+            )
         )
+    )
+
+
+    
     ]
 
     return langchain_tools
@@ -139,6 +157,7 @@ You must use the exact input format for each tool below. Do not invent or guess 
 - get_business_id: Input must be a string (business name). 
 - search_businesses: Input must be a string (query/description) or a dict with 'query' (string) and optional 'k' (int). Example: "vegan restaurant" or {{{{"query": "vegan restaurant", "k": 5}}}}
 - get_business_info: Input must be a string (business_id). 
+- analyze_aspects: Input must be a string (business_id). 
 
 You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
 
@@ -169,6 +188,7 @@ Available capabilities:
 - 🏢 get_business_id: Get the business_id for a given business name
 - 🏢 search_businesses: Semantic search for businesses by description or name
 - 🏢 get_business_info: Get general info for a business_id
+- 🏢 analyze_aspects: Analyze aspects of a list of reviews from a business_id
 
 Begin!
 
