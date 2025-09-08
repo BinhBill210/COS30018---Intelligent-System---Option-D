@@ -1,6 +1,5 @@
 # chromadb_integration.py
 import chromadb
-from chromadb.config import Settings
 from langchain_chroma import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
