@@ -3,10 +3,15 @@ from langchain.agents import create_react_agent, AgentExecutor
 from langchain.tools import Tool as LangChainTool
 from langchain.prompts import PromptTemplate
 from langchain.llms.base import LLM
-from typing import Any, List, Mapping, Optional
+from typing import Any, List, Mapping, Optional, Literal
 from local_llm import LocalLLM
+from gemini_llm import GeminiLLM, GeminiConfig
+from config.api_keys import APIKeyManager
+from config.logging_config import get_performance_logger, get_model_switch_logger
 import torch
 import json
+import logging
+import time
 
 # 1. Create a LangChain-compatible LLM wrapper (same as before)
 class LangChainLocalLLM(LLM):
@@ -32,6 +37,251 @@ class LangChainLocalLLM(LLM):
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
         return {"model_name": self.local_llm.model_name}
+
+
+# 1a. Hybrid LLM with fallback capabilities
+class HybridLLM(LLM):
+    """Hybrid LLM that can switch between local and Gemini models with fallback"""
+    
+    primary_llm: LLM
+    fallback_llm: Optional[LLM] = None
+    primary_model_name: str
+    fallback_model_name: Optional[str] = None
+    enable_fallback: bool = True
+    performance_tracking: dict
+    
+    def __init__(
+        self, 
+        primary_llm: LLM, 
+        fallback_llm: Optional[LLM] = None,
+        primary_model_name: str = "unknown",
+        fallback_model_name: Optional[str] = None,
+        enable_fallback: bool = True,
+        **kwargs
+    ):
+        super().__init__(
+            primary_llm=primary_llm, 
+            fallback_llm=fallback_llm,
+            primary_model_name=primary_model_name,
+            fallback_model_name=fallback_model_name,
+            enable_fallback=enable_fallback,
+            performance_tracking={
+                "primary_successes": 0,
+                "primary_failures": 0,
+                "fallback_uses": 0,
+                "fallback_failures": 0,
+                "total_requests": 0
+            },
+            **kwargs
+        )
+
+    @property
+    def _llm_type(self) -> str:
+        return f"hybrid_{self.primary_model_name}"
+
+    def _call(
+        self,
+        prompt: str,
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> str:
+        self.performance_tracking["total_requests"] += 1
+        perf_logger = get_performance_logger()
+        switch_logger = get_model_switch_logger()
+        
+        # Try primary model first
+        try:
+            start_time = time.time()
+            result = self.primary_llm._call(prompt, stop, **kwargs)
+            generation_time = time.time() - start_time
+            
+            self.performance_tracking["primary_successes"] += 1
+            logging.info(f"Primary model ({self.primary_model_name}) succeeded in {generation_time:.2f}s")
+            
+            # Log performance
+            perf_logger.log_generation(
+                model_name=self.primary_model_name,
+                prompt_length=len(prompt),
+                response_length=len(result),
+                generation_time=generation_time,
+                success=True,
+                model_type="primary",
+                is_fallback=False
+            )
+            
+            return result
+            
+        except Exception as e:
+            self.performance_tracking["primary_failures"] += 1
+            logging.warning(f"Primary model ({self.primary_model_name}) failed: {e}")
+            
+            # Log primary failure
+            perf_logger.log_generation(
+                model_name=self.primary_model_name,
+                prompt_length=len(prompt),
+                response_length=0,
+                generation_time=0,
+                success=False,
+                error_message=str(e),
+                model_type="primary",
+                is_fallback=False
+            )
+            
+            # Try fallback if available and enabled
+            if self.enable_fallback and self.fallback_llm:
+                try:
+                    # Log fallback switch
+                    switch_logger.log_fallback(
+                        primary_model=self.primary_model_name,
+                        fallback_model=self.fallback_model_name,
+                        error_message=str(e)
+                    )
+                    
+                    start_time = time.time()
+                    result = self.fallback_llm._call(prompt, stop, **kwargs)
+                    generation_time = time.time() - start_time
+                    
+                    self.performance_tracking["fallback_uses"] += 1
+                    logging.info(f"Fallback model ({self.fallback_model_name}) succeeded in {generation_time:.2f}s")
+                    
+                    # Log fallback success
+                    perf_logger.log_generation(
+                        model_name=self.fallback_model_name,
+                        prompt_length=len(prompt),
+                        response_length=len(result),
+                        generation_time=generation_time,
+                        success=True,
+                        model_type="fallback",
+                        is_fallback=True
+                    )
+                    
+                    return result
+                    
+                except Exception as fallback_error:
+                    self.performance_tracking["fallback_failures"] += 1
+                    logging.error(f"Fallback model ({self.fallback_model_name}) also failed: {fallback_error}")
+                    
+                    # Log fallback failure
+                    perf_logger.log_generation(
+                        model_name=self.fallback_model_name,
+                        prompt_length=len(prompt),
+                        response_length=0,
+                        generation_time=0,
+                        success=False,
+                        error_message=str(fallback_error),
+                        model_type="fallback",
+                        is_fallback=True
+                    )
+                    
+                    return f"I apologize, but both models encountered errors. Primary: {str(e)}, Fallback: {str(fallback_error)}"
+            else:
+                return f"I apologize, but I encountered an error: {str(e)}"
+
+    @property
+    def _identifying_params(self) -> Mapping[str, Any]:
+        return {
+            "primary_model": self.primary_model_name,
+            "fallback_model": self.fallback_model_name,
+            "fallback_enabled": self.enable_fallback,
+            "performance": self.performance_tracking
+        }
+    
+    def get_performance_stats(self) -> dict:
+        """Get performance statistics for both models"""
+        total = self.performance_tracking["total_requests"]
+        if total == 0:
+            return self.performance_tracking
+        
+        return {
+            **self.performance_tracking,
+            "primary_success_rate": self.performance_tracking["primary_successes"] / total,
+            "primary_failure_rate": self.performance_tracking["primary_failures"] / total,
+            "fallback_usage_rate": self.performance_tracking["fallback_uses"] / total,
+        }
+    
+    def switch_primary_model(self, new_primary: LLM, new_primary_name: str):
+        """Switch the primary model"""
+        # Swap models
+        self.fallback_llm = self.primary_llm
+        self.fallback_model_name = self.primary_model_name
+        self.primary_llm = new_primary
+        self.primary_model_name = new_primary_name
+        
+        logging.info(f"Switched primary model to {new_primary_name}")
+
+
+# 1b. Model factory function
+def create_llm_instance(
+    model_type: Literal["local", "gemini", "hybrid"] = "local",
+    primary_model: Literal["local", "gemini"] = "local",
+    fallback_model: Optional[Literal["local", "gemini"]] = None,
+    gemini_config: Optional[GeminiConfig] = None,
+    local_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+    use_4bit: bool = False
+) -> LLM:
+    """Factory function to create LLM instances
+    
+    Args:
+        model_type: Type of model to create ("local", "gemini", "hybrid")
+        primary_model: Primary model for hybrid setup
+        fallback_model: Fallback model for hybrid setup
+        gemini_config: Configuration for Gemini model
+        local_model_name: Local model name
+        use_4bit: Whether to use 4-bit quantization for local model
+        
+    Returns:
+        Configured LLM instance
+    """
+    api_manager = APIKeyManager()
+    
+    def _create_local_llm() -> LangChainLocalLLM:
+        local_llm = LocalLLM(model_name=local_model_name, use_4bit=use_4bit)
+        return LangChainLocalLLM(local_llm)
+    
+    def _create_gemini_llm() -> GeminiLLM:
+        gemini_key = api_manager.get_api_key('gemini')
+        if not gemini_key:
+            raise ValueError("Gemini API key not found. Please configure it using the API key manager.")
+        
+        config = gemini_config or GeminiConfig()
+        return GeminiLLM(api_key=gemini_key, config=config)
+    
+    if model_type == "local":
+        return _create_local_llm()
+    
+    elif model_type == "gemini":
+        return _create_gemini_llm()
+    
+    elif model_type == "hybrid":
+        # Create primary model
+        if primary_model == "local":
+            primary_llm = _create_local_llm()
+            primary_name = f"local_{local_model_name}"
+        else:
+            primary_llm = _create_gemini_llm()
+            primary_name = f"gemini_{gemini_config.model_name if gemini_config else 'default'}"
+        
+        # Create fallback model if specified
+        fallback_llm = None
+        fallback_name = None
+        if fallback_model:
+            if fallback_model == "local" and primary_model != "local":
+                fallback_llm = _create_local_llm()
+                fallback_name = f"local_{local_model_name}"
+            elif fallback_model == "gemini" and primary_model != "gemini":
+                fallback_llm = _create_gemini_llm()
+                fallback_name = f"gemini_{gemini_config.model_name if gemini_config else 'default'}"
+        
+        return HybridLLM(
+            primary_llm=primary_llm,
+            fallback_llm=fallback_llm,
+            primary_model_name=primary_name,
+            fallback_model_name=fallback_name,
+            enable_fallback=fallback_llm is not None
+        )
+    
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
 # 2. Convert tools to LangChain tools with ChromaDB support
 def create_langchain_tools_chromadb():
@@ -125,14 +375,41 @@ def create_langchain_tools_chromadb():
     return langchain_tools
 
 # 3. Create the LangChain agent with ChromaDB
-def create_business_agent_chromadb():
-    """Create a LangChain-based business review analysis agent with ChromaDB"""
+def create_business_agent_chromadb(
+    model_type: Literal["local", "gemini", "hybrid"] = "local",
+    primary_model: Literal["local", "gemini"] = "local", 
+    fallback_model: Optional[Literal["local", "gemini"]] = None,
+    gemini_config: Optional[GeminiConfig] = None,
+    local_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+    use_4bit: bool = False,
+    max_iterations: int = 15,  # Increased from 5 to 15
+    verbose: bool = True
+):
+    """Create a LangChain-based business review analysis agent with ChromaDB
     
-    # Initialize LocalLLM with the original Qwen model
-    local_llm = LocalLLM(model_name="Qwen/Qwen2.5-1.5B-Instruct", use_4bit=False)
+    Args:
+        model_type: Type of model to use ("local", "gemini", "hybrid")
+        primary_model: Primary model for hybrid setup
+        fallback_model: Fallback model for hybrid setup
+        gemini_config: Configuration for Gemini model
+        local_model_name: Local model name
+        use_4bit: Whether to use 4-bit quantization for local model
+        max_iterations: Maximum iterations for agent
+        verbose: Whether to enable verbose logging
+        
+    Returns:
+        Configured AgentExecutor
+    """
     
-    # Wrap it for LangChain
-    llm = LangChainLocalLLM(local_llm)
+    # Create LLM instance based on configuration
+    llm = create_llm_instance(
+        model_type=model_type,
+        primary_model=primary_model,
+        fallback_model=fallback_model,
+        gemini_config=gemini_config,
+        local_model_name=local_model_name,
+        use_4bit=use_4bit
+    )
     
     # Get tools with ChromaDB support
     tools = create_langchain_tools_chromadb()
@@ -210,8 +487,8 @@ New input: {input}
     agent_executor = AgentExecutor(
         agent=agent,
         tools=tools,
-        verbose=True,
-        max_iterations=5,
+        verbose=verbose,
+        max_iterations=max_iterations,
         handle_parsing_errors=True
     )
     

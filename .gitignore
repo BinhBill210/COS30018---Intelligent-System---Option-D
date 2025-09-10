@@ -163,3 +163,6 @@ results/figures/*.png
 results/figures/*.jpg
 results/figures/*.pdf
 
+config/.enc_key
+logs/errors.log
+logs/hybrid_llm.log

@@ -1,0 +1,141 @@
+# environment-hybrid.yml
+# Complete environment for Hybrid LLM Business Intelligence System
+# Includes support for local models, Google Gemini API, and all dependencies
+#
+# Usage:
+#   conda env create -f environment-hybrid.yml
+#   conda activate hybrid-llm-bi
+
+name: hybrid-llm-bi
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia  # For CUDA support
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.10
+
+  # PyTorch ecosystem (for local models)
+  - pytorch>=2.0.0
+  - torchvision
+  - torchaudio
+  # Uncomment for CUDA support (if you have NVIDIA GPU):
+  # - pytorch-cuda=11.8
+  # For CPU-only, use:
+  # - cpuonly
+
+  # Essential data processing
+  - pandas>=1.5.0
+  - numpy>=1.24.0
+  - scipy>=1.10.0
+  - scikit-learn>=1.3.0
+  
+  # Visualization
+  - matplotlib>=3.7.0
+  - seaborn>=0.12.0
+  
+  # File processing
+  - pyarrow>=14.0.0
+  - fastparquet>=0.8.0
+  - pyyaml>=6.0
+  - h5py>=3.9.0
+  
+  # Database and storage
+  - sqlite>=3.42.0
+  
+  # Cryptography for secure API key storage
+  - cryptography>=41.0.0
+  
+  # Web requests and HTTP
+  - requests>=2.31.0
+  - urllib3>=2.0.0
+  
+  # Progress bars and utilities
+  - tqdm>=4.65.0
+  - psutil>=5.9.0
+  
+  # Development tools
+  - pip>=23.0
+  - setuptools>=68.0.0
+  - wheel>=0.41.0
+
+  # Install via pip (for latest versions and compatibility)
+  - pip:
+      # === CORE LLM FRAMEWORKS ===
+      # LangChain ecosystem
+      - langchain>=0.1.0
+      - langchain-community>=0.0.10
+      - langchain-core>=0.1.0
+      - langsmith>=0.0.70
+      
+      # Google Gemini API
+      - google-generativeai>=0.3.0
+      - google-auth>=2.17.0
+      - google-auth-oauthlib>=1.0.0
+      
+      # === VECTOR DATABASES ===
+      # ChromaDB for RAG
+      - chromadb>=0.4.0
+      - langchain-chroma>=0.1.0
+      
+      # === LOCAL MODEL SUPPORT ===
+      # HuggingFace ecosystem
+      - transformers>=4.36.0
+      - sentence-transformers>=2.2.0
+      - huggingface-hub>=0.19.0
+      - tokenizers>=0.15.0
+      - safetensors>=0.4.0
+      - accelerate>=0.24.0
+      
+      # Model optimization (optional, for GPU acceleration)
+      - bitsandbytes>=0.41.0  # For 4-bit quantization
+      - optimum>=1.14.0       # For model optimization
+      
+      # === WEB INTERFACE ===
+      # Streamlit for UI
+      - streamlit>=1.28.0
+      - streamlit-chat>=0.1.0  # Enhanced chat components
+      
+      # === SECURITY & KEY MANAGEMENT ===
+      # Secure key storage
+      - keyring>=24.0.0
+      
+      # === DATA PROCESSING ===
+      # Enhanced data handling
+      - rapidfuzz>=3.5.0      # Fast string matching
+      - python-dotenv>=1.0.0  # Environment variables
+      - ijson>=3.2.0          # JSON streaming
+      -
+      # === MONITORING & LOGGING ===
+      # Enhanced logging
+      - colorlog>=6.7.0       # Colored logs
+      - rich>=13.7.0          # Rich terminal output
+      
+      # === VALIDATION & SCHEMAS ===
+      # Data validation
+      - pydantic>=2.5.0
+      - pydantic-settings>=2.1.0
+      
+      # === TESTING & DEVELOPMENT ===
+      # Testing framework
+      - pytest>=7.4.0
+      - pytest-asyncio>=0.21.0
+      
+      # Code quality
+      - black>=23.0.0         # Code formatting
+      - flake8>=6.0.0         # Linting
+      - isort>=5.12.0         # Import sorting
+      
+      # === UTILITIES ===
+      # File handling and utilities
+      - pathlib2>=2.3.0
+      - click>=8.1.0          # CLI utilities
+      
+      # === OPTIONAL ENHANCEMENTS ===
+      # Additional ML tools (commented out by default)
+      # - spacy>=3.7.0        # Advanced NLP
+      # - nltk>=3.8.0         # Natural language toolkit
+      # - wordcloud>=1.9.0    # Word cloud generation
+      # - plotly>=5.17.0      # Interactive plots
