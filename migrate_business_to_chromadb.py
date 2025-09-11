@@ -27,9 +27,20 @@ def main():
     for idx, row in df.iterrows():
         # Concatenate relevant fields for semantic search
         text = f"{row['name']}, {row['address']}, {row['city']}, {row['state']}, {row['categories']}"
-        metadata = {}
+        # Always include these fields in metadata, even if empty
+        metadata = {
+            "business_id": row.get("business_id", ""),
+            "name": row.get("name", ""),
+            "address": row.get("address", ""),
+            "city": row.get("city", ""),
+            "state": row.get("state", ""),
+            "postal_code": row.get("postal_code", ""),
+            "stars": row.get("stars", ""),
+            "categories": row.get("categories", ""),
+        }
+        # Add all other fields, converting dict/list to str
         for k in df.columns:
-            if k != 'name' and pd.notna(row[k]):
+            if k not in metadata and pd.notna(row[k]):
                 v = row[k]
                 if isinstance(v, (dict, list)):
                     metadata[k] = str(v)

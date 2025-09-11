@@ -19,7 +19,7 @@ class BusinessSearchTool:
         """Exact name lookup"""
         return self.name_to_id.get(name.lower())
 
-    def search_businesses(self, query: str, k: int = 1):
+    def search_businesses(self, query: str, k: int = 3):
         """Semantic search using ChromaDB embeddings"""
         results = self.vector_store.similarity_search(query, k=k)
         output = []
