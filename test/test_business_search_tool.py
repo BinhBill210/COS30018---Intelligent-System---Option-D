@@ -1,8 +1,10 @@
 from tools.business_search_tool import BusinessSearchTool
+import os
 
 def test_business_search_tool():
     print("Testing BusinessSearchTool...")
-    tool = BusinessSearchTool()
+    host = os.environ.get("CHROMA_HOST", "localhost")
+    tool = BusinessSearchTool(host=host)
 
     # Test exact name lookup
     name = "Vietnamese Food Truck"

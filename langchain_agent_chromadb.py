@@ -12,6 +12,7 @@ import torch
 import json
 import logging
 import time
+import os
 
 # 1. Create a LangChain-compatible LLM wrapper (same as before)
 class LangChainLocalLLM(LLM):
@@ -88,13 +89,15 @@ def create_langchain_tools_chromadb():
     from tools.data_summary_tool import DataSummaryTool
     from tools.business_search_tool import BusinessSearchTool
     from tools.aspect_analysis import AspectABSAToolHF
+
+    chroma_host=os.environ.get("CHROMA_HOST", "localhost")
     
 
     # Initialize tools
-    search_tool = ReviewSearchTool()  # ChromaDB search
+    search_tool = ReviewSearchTool(host=chroma_host)  # ChromaDB search
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
-    business_tool = BusinessSearchTool()
+    business_tool = BusinessSearchTool(host=chroma_host)
     aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
