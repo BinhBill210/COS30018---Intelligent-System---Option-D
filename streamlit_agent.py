@@ -1,10 +1,15 @@
 import streamlit as st
 import sys
 import logging
-from langchain_agent_chromadb import create_business_agent_chromadb, HybridLLM, create_llm_instance
+import os
+from pathlib import Path
+from langchain_agent_chromadb import create_business_agent_chromadb, create_llm_instance
 from gemini_llm import GeminiConfig
-from config.api_keys import APIKeyManager, setup_api_keys_interactive
+from config.api_keys import APIKeyManager, setup_api_keys_interactive, load_dotenv
 from config.logging_config import setup_logging, get_performance_logger
+
+# Try to load .env file at startup
+load_dotenv()
 
 # Initialize logging
 setup_logging("INFO")
@@ -31,10 +36,6 @@ def initialize_session_state():
     # Model configuration
     if "model_type" not in st.session_state:
         st.session_state.model_type = "local"
-    if "primary_model" not in st.session_state:
-        st.session_state.primary_model = "local"
-    if "fallback_model" not in st.session_state:
-        st.session_state.fallback_model = None
     if "current_model_info" not in st.session_state:
         st.session_state.current_model_info = "Local Qwen2.5"
     if "api_key_status" not in st.session_state:
@@ -43,12 +44,10 @@ def initialize_session_state():
         st.session_state.current_llm_instance = None
 
 # Load agent
-def load_agent(model_type, primary_model, fallback_model, gemini_config=None):
+def load_agent(model_type, gemini_config=None):
     try:
         return create_business_agent_chromadb(
             model_type=model_type,
-            primary_model=primary_model,
-            fallback_model=fallback_model,
             gemini_config=gemini_config,
             local_model_name="Qwen/Qwen2.5-1.5B-Instruct",
             use_4bit=False,
@@ -91,11 +90,11 @@ def render_model_selection():
     st.session_state.api_key_status = api_status
     
     # Model type selection
-    model_options = ["local", "gemini", "hybrid"]
+    model_options = ["local", "gemini"]
     
-    # Disable Gemini/hybrid if no valid API key
+    # Disable Gemini if no valid API key
     if not api_status.get('gemini', {}).get('valid', False):
-        if st.session_state.model_type in ["gemini", "hybrid"]:
+        if st.session_state.model_type == "gemini":
             st.warning("⚠️ Gemini API key not configured or invalid. Falling back to local model.")
             st.session_state.model_type = "local"
     
@@ -103,7 +102,7 @@ def render_model_selection():
         "Select Model Type",
         options=model_options,
         index=model_options.index(st.session_state.model_type),
-        help="Choose between local LLM, Gemini API, or hybrid mode",
+        help="Choose between local LLM or Gemini API",
         key="model_type_select"
     )
     
@@ -113,77 +112,35 @@ def render_model_selection():
         st.session_state.agent_executor = None
         st.session_state.agent_loaded = False
     
-    # Hybrid model configuration
-    if model_type == "hybrid":
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            primary_options = ["local", "gemini"]
-            primary_model = st.selectbox(
-                "Primary Model",
-                options=primary_options,
-                index=primary_options.index(st.session_state.primary_model),
-                help="Primary model to use first",
-                key="primary_model_select"
-            )
-            
-            if primary_model != st.session_state.primary_model:
-                st.session_state.primary_model = primary_model
-                st.session_state.agent_executor = None
-                st.session_state.agent_loaded = False
-        
-        with col2:
-            fallback_options = [None, "local", "gemini"]
-            fallback_labels = ["None", "Local", "Gemini"]
-            
-            current_fallback_idx = 0
-            if st.session_state.fallback_model:
-                current_fallback_idx = fallback_options.index(st.session_state.fallback_model)
-            
-            fallback_model = st.selectbox(
-                "Fallback Model",
-                options=fallback_options,
-                format_func=lambda x: fallback_labels[fallback_options.index(x)],
-                index=current_fallback_idx,
-                help="Fallback model if primary fails",
-                key="fallback_model_select"
-            )
-            
-            if fallback_model != st.session_state.fallback_model:
-                st.session_state.fallback_model = fallback_model
-                st.session_state.agent_executor = None
-                st.session_state.agent_loaded = False
-    
     # API Key management
-    with st.expander("🔑 API Key Management"):
-        if not api_status.get('gemini', {}).get('available', False):
-            st.warning("No Gemini API key found")
+    with st.expander("🔑 API Key Status"):
+        st.write("API keys can be configured via:")
+        st.markdown("""
+        1. **Environment Variables**: Set `GEMINI_API_KEY` in your environment
+        2. **`.env` File**: Create a `.env` file in the project root with `GEMINI_API_KEY=your_key_here`
+        """)
+        
+        # Display Gemini API key status
+        gemini_status = "✓ Valid" if api_status['gemini']['valid'] else "✗ Not available or invalid"
+        st.info(f"Gemini API Key: {gemini_status}")
+        
+        # Show where the key was found if it exists
+        if api_status['gemini']['available']:
+            api_manager = APIKeyManager()
+            if 'GEMINI_API_KEY' in os.environ:
+                source = "from environment variable"
+            elif api_manager.get_api_key('gemini'):
+                source = "from system storage"
+            else:
+                source = "unknown source"
+                
+            st.text(f"API key loaded {source}")
             
-            gemini_key_input = st.text_input(
-                "Enter Gemini API Key",
-                type="password",
-                help="Get your API key from https://makersuite.google.com/app/apikey"
-            )
-            
-            if st.button("Save Gemini API Key"):
-                if gemini_key_input:
-                    api_manager = APIKeyManager()
-                    if api_manager.save_api_key('gemini', gemini_key_input):
-                        st.success("✓ Gemini API key saved successfully")
-                        st.rerun()
-                    else:
-                        st.error("Failed to save API key")
-                else:
-                    st.error("Please enter an API key")
+            # Simple hint for users who need to set up API key
+            if not api_status['gemini']['valid']:
+                st.warning("The API key was found but appears to be invalid")
         else:
-            gemini_status = "✓ Valid" if api_status['gemini']['valid'] else "✗ Invalid"
-            st.info(f"Gemini API Key: {gemini_status}")
-            
-            if st.button("Remove Gemini API Key"):
-                api_manager = APIKeyManager()
-                if api_manager.delete_api_key('gemini'):
-                    st.success("API key removed")
-                    st.rerun()
+            st.warning("No Gemini API key found. Run 'python scripts/create_env_file.py' to set up your API keys.")
     
     return model_type
 
@@ -210,8 +167,6 @@ def main():
                     
                     agent_result = load_agent(
                         model_type=st.session_state.model_type,
-                        primary_model=st.session_state.primary_model,
-                        fallback_model=st.session_state.fallback_model,
                         gemini_config=gemini_config
                     )
                     
@@ -225,8 +180,6 @@ def main():
                             # This will help us access performance stats later
                             llm_instance = create_llm_instance(
                                 model_type=st.session_state.model_type,
-                                primary_model=st.session_state.primary_model,
-                                fallback_model=st.session_state.fallback_model,
                                 gemini_config=gemini_config
                             )
                             st.session_state.current_llm_instance = llm_instance
@@ -238,8 +191,6 @@ def main():
                             st.session_state.current_model_info = "Local Qwen2.5"
                         elif st.session_state.model_type == "gemini":
                             st.session_state.current_model_info = "Google Gemini"
-                        else:  # hybrid
-                            st.session_state.current_model_info = f"Hybrid ({st.session_state.primary_model} + {st.session_state.fallback_model})"
                         
                         st.success("Agent loaded successfully!")
                         st.rerun()
@@ -326,7 +277,6 @@ def main():
         ### Model Options:
         - **Local**: Fast, private Qwen2.5 model running on your machine
         - **Gemini**: Google's powerful API model for complex reasoning
-        - **Hybrid**: Best of both worlds with automatic fallback
         """)
         return
     

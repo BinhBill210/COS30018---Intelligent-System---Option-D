@@ -9,20 +9,56 @@ from cryptography.fernet import Fernet
 import base64
 
 
+def load_dotenv(env_file=".env"):
+    """Load environment variables from .env file
+    
+    Args:
+        env_file: Path to .env file
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if not os.path.exists(env_file):
+            logging.info(f".env file not found at {env_file}")
+            return False
+        
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                    
+                key, value = line.split('=', 1)
+                os.environ[key.strip()] = value.strip().strip("'").strip('"')
+        
+        logging.info(f"Loaded environment variables from {env_file}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to load .env file: {e}")
+        return False
+
+
 class APIKeyManager:
     """Secure API key management system with multiple storage options"""
     
-    def __init__(self, use_keyring: bool = True, encryption_key: Optional[str] = None):
+    def __init__(self, use_keyring: bool = True, encryption_key: Optional[str] = None, load_env: bool = True):
         """Initialize API key manager
         
         Args:
             use_keyring: Whether to use system keyring for storage
             encryption_key: Optional encryption key for file-based storage
+            load_env: Whether to try loading from .env file
         """
         self.use_keyring = use_keyring
         self.config_dir = Path("config")
         self.config_dir.mkdir(exist_ok=True)
         self.key_file = self.config_dir / ".api_keys.enc"
+        
+        # Try to load from .env file
+        if load_env:
+            # Try project root .env first, then config dir .env
+            load_dotenv(".env") or load_dotenv("config/.env")
         
         # Initialize encryption
         if encryption_key:
