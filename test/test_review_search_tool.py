@@ -2,8 +2,8 @@ from tools.review_search_tool import ReviewSearchTool
 
 def test_review_search_tool():
     print("Testing ReviewSearchTool...")
-    search_tool = ReviewSearchTool("./chroma_db")
-    query = "service quality"
+    search_tool = ReviewSearchTool()
+    query = "Terrible host service, 45 minute wait, seated other parties of the same size that arrived after us. Someone needs to manage this location, been a customer for a long time, likely done after this visit. Poor management."
     business_id = "XQfwVwDr-v0ZS3_CbbE5Xw"
     results = search_tool(query, k=10, business_id=business_id)
     print(f"Query: {query}")
