@@ -91,10 +91,10 @@ def create_langchain_tools_chromadb():
     
 
     # Initialize tools
-    search_tool = ReviewSearchTool("./chroma_db")  # ChromaDB search
+    search_tool = ReviewSearchTool()  # ChromaDB search
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
-    business_tool = BusinessSearchTool("data/processed/business_cleaned.csv", "./business_chroma_db")
+    business_tool = BusinessSearchTool()
     aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [

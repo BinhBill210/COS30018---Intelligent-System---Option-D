@@ -113,44 +113,19 @@ def render_model_selection():
         st.session_state.agent_loaded = False
     
     # API Key management
-    with st.expander("🔑 API Key Management"):
-        st.write("You can configure API keys in three ways:")
+    with st.expander("🔑 API Key Status"):
+        st.write("API keys can be configured via:")
         st.markdown("""
         1. **Environment Variables**: Set `GEMINI_API_KEY` in your environment
         2. **`.env` File**: Create a `.env` file in the project root with `GEMINI_API_KEY=your_key_here`
-        3. **Input Below**: Enter your API key directly in this UI
         """)
         
-        if not api_status.get('gemini', {}).get('available', False):
-            st.warning("No Gemini API key found")
-            
-            # Help user create .env file
-            st.markdown("#### Use .env file (Recommended)")
-            st.markdown("You can run the helper script to create a `.env` file:")
-            st.code("python scripts/create_env_file.py", language="bash")
-            
-            st.markdown("#### Or enter key directly:")
-            gemini_key_input = st.text_input(
-                "Enter Gemini API Key",
-                type="password",
-                help="Get your API key from https://makersuite.google.com/app/apikey"
-            )
-            
-            if st.button("Save Gemini API Key"):
-                if gemini_key_input:
-                    api_manager = APIKeyManager()
-                    if api_manager.save_api_key('gemini', gemini_key_input):
-                        st.success("✓ Gemini API key saved successfully")
-                        st.rerun()
-                    else:
-                        st.error("Failed to save API key")
-                else:
-                    st.error("Please enter an API key")
-        else:
-            gemini_status = "✓ Valid" if api_status['gemini']['valid'] else "✗ Invalid"
-            st.info(f"Gemini API Key: {gemini_status}")
-            
-            # Show where the key was found
+        # Display Gemini API key status
+        gemini_status = "✓ Valid" if api_status['gemini']['valid'] else "✗ Not available or invalid"
+        st.info(f"Gemini API Key: {gemini_status}")
+        
+        # Show where the key was found if it exists
+        if api_status['gemini']['available']:
             api_manager = APIKeyManager()
             if 'GEMINI_API_KEY' in os.environ:
                 source = "from environment variable"
@@ -161,11 +136,11 @@ def render_model_selection():
                 
             st.text(f"API key loaded {source}")
             
-            if st.button("Remove Gemini API Key"):
-                api_manager = APIKeyManager()
-                if api_manager.delete_api_key('gemini'):
-                    st.success("API key removed")
-                    st.rerun()
+            # Simple hint for users who need to set up API key
+            if not api_status['gemini']['valid']:
+                st.warning("The API key was found but appears to be invalid")
+        else:
+            st.warning("No Gemini API key found. Run 'python scripts/create_env_file.py' to set up your API keys.")
     
     return model_type
 
