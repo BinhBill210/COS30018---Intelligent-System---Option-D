@@ -103,11 +103,17 @@ def create_langchain_tools_chromadb():
     langchain_tools = [
         LangChainTool(
             name="search_reviews",
-            description="Search for relevant reviews based on semantic similarity. Input can be a string (query) and optional 'k'.",
+            description="Search for relevant reviews based on semantic similarity. Input can be a string (query), or a dict with 'query', optional 'k', and optional 'business_id'. The business_id is to only return the records that have that business_id.",
             func=lambda input: (
                 print(f"[TOOL CALLED] search_reviews with input: {input}") or
-                (search_tool(input, k=5) if isinstance(input, str)
-                else search_tool(input.get("query", ""), k=input.get("k", 5)))
+                (
+                    search_tool(input, k=5) if isinstance(input, str)
+                    else search_tool(
+                        input.get("query", ""),
+                        k=input.get("k", 5),
+                        business_id=input.get("business_id", None)
+                    )
+                )
             )
         ),
         LangChainTool(
@@ -134,6 +140,15 @@ def create_langchain_tools_chromadb():
             func=lambda name: (
                 print(f"[TOOL CALLED] get_business_id with input: {name}") or
                 business_tool.get_business_id(name)
+            )
+        ),
+        LangChainTool(
+            name="business_fuzzy_search",
+            description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. Returns a list of similar business records.",
+            func=lambda input: (
+                print(f"[TOOL CALLED] fuzzy_search with input: {input}") or
+                (business_tool.fuzzy_search(input) if isinstance(input, str)
+                 else business_tool.fuzzy_search(input.get('query', ''), top_n=input.get('top_n', 5)))
             )
         ),
         LangChainTool(
@@ -253,13 +268,14 @@ Final Answer: [your response here]
 ```
 
 Available capabilities:
-- 🔍 search_reviews: Find relevant reviews using semantic similarity (powered by ChromaDB)
-- 😊 analyze_sentiment: Analyze sentiment patterns in review texts
-- 📊 get_data_summary: Get statistical summaries of review data
-- 🏢 get_business_id: Get the business_id for a given business name
-- 🏢 search_businesses: Semantic search for businesses by description or name
-- 🏢 get_business_info: Get general info for a business_id
-- 🏢 analyze_aspects: Analyze aspects of a list of reviews from a business_id
+- search_reviews: Find relevant reviews using semantic similarity (powered by ChromaDB)
+- analyze_sentiment: Analyze sentiment patterns in review texts
+- get_data_summary: Get statistical summaries of review data
+- get_business_id: Get the business_id for a given business name
+- search_businesses: Semantic search for businesses by description or name
+- get_business_info: Get general info for a business_id
+- analyze_aspects: Analyze aspects of a list of reviews from a business_id
+- business_fuzzy_search: Fuzzy search for businesses by name
 
 Begin!
 
