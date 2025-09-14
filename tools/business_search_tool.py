@@ -1,38 +1,56 @@
 import pandas as pd
-from chromadb_integration import ChromaDBVectorStore
+import chromadb
 from rapidfuzz import process
 
 class BusinessSearchTool:
     """Tool for business name/id linking, semantic search, and info retrieval"""
-    def __init__(self, business_data_path="data/processed/business_cleaned.parquet", chroma_db_path="./business_chroma_db"):
+    def __init__(self, business_data_path="data/processed/business_cleaned.parquet", host="localhost", port=8000):
         if business_data_path.endswith('.parquet'):
             self.df = pd.read_parquet(business_data_path)
         else:
             self.df = pd.read_csv(business_data_path)
-        self.vector_store = ChromaDBVectorStore(
-            collection_name="yelp_businesses",
-            persist_directory=chroma_db_path
-        )
+        
+        # Change: Replace ChromaDBVectorStore with ChromaDB HTTP client
+        self.client = chromadb.HttpClient(host=host, port=port)
+        self.collection = self.client.get_collection("yelp_businesses")
+        
         self.name_to_id = {name.lower(): bid for bid, name in zip(self.df['business_id'], self.df['name'])}
 
     def get_business_id(self, name: str):
         """Exact name lookup"""
         return self.name_to_id.get(name.lower())
 
-    def search_businesses(self, query: str, k: int = 1):
+    def search_businesses(self, query: str, k: int = 3):
         """Semantic search using ChromaDB embeddings"""
-        results = self.vector_store.similarity_search(query, k=k)
+        # Change: Use collection.query instead of vector_store.similarity_search
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=k
+        )
+        
         output = []
-        for doc, score in results:
-            meta = doc.metadata
-            output.append({
-                "business_id": meta.get("business_id", ""),
-                "name": meta.get("name", ""),
-                "address": meta.get("address", ""),
-                "stars": meta.get("stars", ""),
-                "categories": meta.get("categories", ""),
-                "score": score
-            })
+        # Change: Process results from collection.query format
+        if results and 'ids' in results and len(results['ids']) > 0:
+            for i in range(len(results['ids'][0])):
+                # Get metadata from results
+                meta = results['metadatas'][0][i] if 'metadatas' in results else {}
+                
+                # Distance in ChromaDB (lower is more similar)
+                distance = results['distances'][0][i] if 'distances' in results else 0
+                
+                # Convert to similarity score (higher is more similar)
+                # Note: Using same conversion as original tool for consistency
+                similarity_score = 1.0 - distance
+                
+                output.append({
+                    "business_id": meta.get("business_id", ""),
+                    "name": meta.get("name", ""),
+                    "address": meta.get("address", ""),
+                    "stars": meta.get("stars", ""),
+                    "categories": meta.get("categories", ""),
+                    "score": similarity_score
+                })
+                
         return output
 
     def fuzzy_search(self, query: str, top_n: int = 5):

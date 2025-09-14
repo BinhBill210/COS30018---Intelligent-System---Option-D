@@ -109,6 +109,11 @@ chroma_db/
 business_chroma_db/
 *.chroma
 
+# DuckDB database files (large files, regenerate with setup script)
+*.duckdb
+business_analytics.duckdb
+test_analytics.duckdb
+
 # Old FAISS index files (if any remain)
 index_demo/
 *.index
@@ -158,3 +163,6 @@ results/figures/*.png
 results/figures/*.jpg
 results/figures/*.pdf
 
+config/.enc_key
+logs/errors.log
+logs/hybrid_llm.log

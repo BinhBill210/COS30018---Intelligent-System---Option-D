@@ -1,4 +1,4 @@
-# tools/t1_hybrid_retrieve.py
+# tools/hybrid_retrieval_tool.py
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List

@@ -6,7 +6,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.t2_business_pulse import BusinessPulseChromaDB as BusinessPulse
+from tools.business_pulse import BusinessPulseChromaDB as BusinessPulse
 
 def demo_t2_business_pulse():
     """Demonstrate T2 BusinessPulse tool with automated sentiment analysis."""

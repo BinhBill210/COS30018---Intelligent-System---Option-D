@@ -8,7 +8,7 @@ sys.path.insert(0, parent_dir)
 print(f"Current directory: {current_dir}")
 print(f"Python path: {sys.path[:3]}")  # Check first 3 paths
 
-from tools.t1_hybrid_retrieve import HybridRetrieve
+from tools.hybrid_retrieval_tool import HybridRetrieve
 
 
 def demo_t1_hybrid_retrieve():

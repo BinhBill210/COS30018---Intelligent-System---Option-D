@@ -1,25 +1,27 @@
 from tools.business_search_tool import BusinessSearchTool
+import os
 
 def test_business_search_tool():
     print("Testing BusinessSearchTool...")
-    tool = BusinessSearchTool()
+    host = os.environ.get("CHROMA_HOST", "localhost")
+    tool = BusinessSearchTool(host=host)
 
     # Test exact name lookup
-    name = "The UPS Store"
+    name = "Vietnamese Food Truck"
     business_id = tool.get_business_id(name)
     print(f"Business ID for '{name}': {business_id}")
     assert business_id is not None
 
     # Test fuzzy search
-    fuzzy_results = tool.fuzzy_search("UPS", top_n=3)
-    print("Fuzzy search results for 'UPS':")
+    fuzzy_results = tool.fuzzy_search("Vietnamese Food Truck", top_n=3)
+    print("Fuzzy search results for 'Vietnamese Food Truck':")
     for res in fuzzy_results:
         print(res)
     assert len(fuzzy_results) > 0
 
     # Test semantic search
-    semantic_results = tool.search_businesses("Abby Rappoport, LAC, CMQ")
-    print("Semantic search results for 'Abby Rappoport, LAC, CMQ':")
+    semantic_results = tool.search_businesses("Vietnamese Food Truck")
+    print("Semantic search results for 'Vietnamese Food Truck':")
     for res in semantic_results:
         print(res)
     assert len(semantic_results) > 0
