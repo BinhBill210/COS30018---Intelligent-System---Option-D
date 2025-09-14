@@ -2,7 +2,7 @@
 import chromadb
 from chromadb.config import Settings
 from langchain_chroma import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 import pandas as pd
@@ -17,7 +17,7 @@ class ChromaDBVectorStore:
                  embedding_model: str = "all-MiniLM-L6-v2"):
         
         # Initialize embeddings (same model you're using)
-        self.embeddings = SentenceTransformerEmbeddings(
+        self.embeddings = HuggingFaceEmbeddings(
             model_name=embedding_model
         )
         
