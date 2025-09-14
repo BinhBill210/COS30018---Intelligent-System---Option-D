@@ -144,7 +144,7 @@ def create_langchain_tools_chromadb():
         ),
         LangChainTool(
             name="business_fuzzy_search",
-            description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. Returns a list of similar business records.",
+            description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. The input query is used to search the business record with the business name most similar to the input query. Returns a list of similar business records.",
             func=lambda input: (
                 print(f"[TOOL CALLED] fuzzy_search with input: {input}") or
                 (business_tool.fuzzy_search(input) if isinstance(input, str)
@@ -153,7 +153,7 @@ def create_langchain_tools_chromadb():
         ),
         LangChainTool(
             name="search_businesses",
-            description="Semantic search for businesses. Input should be a string (query/description) or a dict with 'query' and optional 'k'.",
+            description="Semantic search for businesses. Return a business record. Input should be a string (query/description) or a dict with 'query' and optional 'k'. Input query represent any information about the business",
             func=lambda input: (
                 print(f"[TOOL CALLED] search_businesses with input: {input}") or
                 (business_tool.search_businesses(input, k=5) if isinstance(input, str)
@@ -243,7 +243,8 @@ You must use the exact input format for each tool below. Do not invent or guess 
 - get_business_id: Input must be a string (business name). 
 - search_businesses: Input must be a string (query/description) or a dict with 'query' (string) and optional 'k' (int). Example: "vegan restaurant" or {{{{"query": "vegan restaurant", "k": 5}}}}
 - get_business_info: Input must be a string (business_id). 
-- analyze_aspects: Input must be a string (business_id). 
+- analyze_aspects: Input must be a string (business_id).
+- business_fuzzy_search: Input must be a string (query) or a dict with 'query' (string) and optional 'top_n' (int). 
 
 You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
 
