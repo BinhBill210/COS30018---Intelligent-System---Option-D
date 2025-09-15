@@ -32,14 +32,12 @@ def create_schema():
     
     db_manager = get_db_manager()
     
-    # Split by semicolon and execute each statement
-    statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip() and not stmt.strip().startswith('--')]
-    
-    for stmt in statements:
-        try:
-            db_manager.execute_update(stmt)
-        except Exception as e:
-            logger.warning(f"Schema statement failed (may be normal): {e}")
+    # Execute the entire schema at once
+    try:
+        db_manager.execute_update(schema_sql)
+    except Exception as e:
+        logger.error(f"Schema creation failed: {e}")
+        raise
     
     logger.info("Database schema created successfully")
 
