@@ -249,6 +249,48 @@ def main():
             else:
                 st.warning("⚠️ Gemini API Not Available")
         
+        # Database status
+        st.subheader("🗄️ Database Status")
+        try:
+            import sys
+            from pathlib import Path
+            sys.path.append(str(Path(__file__).parent))
+            from database.db_manager import get_db_manager
+            
+            db_manager = get_db_manager()
+            
+            # Test database connectivity
+            business_count = db_manager.execute_query("SELECT COUNT(*) as count FROM businesses")
+            
+            if not business_count.empty and business_count.iloc[0, 0] > 0:
+                st.success("✓ DuckDB Connected")
+                st.metric("Businesses", f"{business_count.iloc[0, 0]:,}")
+                
+                # Try to get review count (optional)
+                try:
+                    review_count = db_manager.execute_query("SELECT COUNT(*) as count FROM reviews")
+                    if not review_count.empty and review_count.iloc[0, 0] > 0:
+                        st.metric("Reviews", f"{review_count.iloc[0, 0]:,}")
+                    else:
+                        st.info("Reviews: Not loaded")
+                except:
+                    st.info("Reviews: Not available")
+                
+                # Get performance stats
+                stats = db_manager.get_performance_stats()
+                if stats.get('total_queries', 0) > 0:
+                    st.metric("DB Queries", stats['total_queries'])
+                
+                st.metric("DB Size", f"{stats.get('database_size_mb', 0):.1f} MB")
+                
+            else:
+                st.warning("⚠️ DuckDB Not Set Up")
+                st.info("💡 Run: `python migration/setup_database.py`")
+                
+        except Exception as e:
+            st.error(f"❌ DuckDB Setup Needed")
+            st.info("💡 Run: `python migration/setup_database.py`")
+        
         # Debug info (collapsible)
         with st.expander("ℹ️ System Info"):
             st.text(f"Agent loaded: {st.session_state.agent_loaded}")

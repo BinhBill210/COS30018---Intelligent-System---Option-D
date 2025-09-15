@@ -144,7 +144,7 @@ def create_langchain_tools_chromadb():
         ),
         LangChainTool(
             name="business_fuzzy_search",
-            description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. The input query is used to search the business record with the business name most similar to the input query. Returns a list of similar business records.",
+            description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. Uses DuckDB for fast SQL-based fuzzy matching.",
             func=lambda input: (
                 print(f"[TOOL CALLED] fuzzy_search with input: {input}") or
                 (business_tool.fuzzy_search(input) if isinstance(input, str)
