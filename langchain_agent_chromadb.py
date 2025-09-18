@@ -89,6 +89,8 @@ def create_langchain_tools_chromadb():
     from tools.data_summary_tool import DataSummaryTool
     from tools.business_search_tool import BusinessSearchTool
     from tools.aspect_analysis import AspectABSAToolHF
+    from tools.ActionPlanner import ActionPlannerTool
+    from tools.ReviewResponseTool import ReviewResponseTool
 
     chroma_host=os.environ.get("CHROMA_HOST", "localhost")
     
@@ -99,6 +101,8 @@ def create_langchain_tools_chromadb():
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
     business_tool = BusinessSearchTool(host=chroma_host)
     aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
+    action_planner_tool = ActionPlannerTool()
+    review_response_tool = ReviewResponseTool()
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
@@ -179,14 +183,41 @@ def create_langchain_tools_chromadb():
                     (json.loads(input).get("business_id")
                     if isinstance(input, str) and input.strip().startswith("{")
                     else str(input).strip())
+                )
+            )
+        ),
+        LangChainTool(
+            name="create_action_plan",
+            description=(
+                "Generate an actionable business improvement plan. Input must be a JSON string or dict with optional keys: 'business_id' (string), 'goals' (list of strings), 'constraints' (dict with 'budget' number and 'timeline_weeks' number), 'priority_issues' (list of strings from: 'quality', 'service', 'value', 'customer_experience'). "
+                "Example: {\"business_id\": \"ABC123\", \"goals\": [\"improve_customer_satisfaction\"], \"constraints\": {\"budget\": 5000, \"timeline_weeks\": 8}, \"priority_issues\": [\"quality\", \"service\"]}"
+            ),
+            func=lambda input: (
+                print(f"[TOOL CALLED] create_action_plan with input: {input}") or
+                action_planner_tool(
+                    **(json.loads(input) if isinstance(input, str) and input.strip().startswith('{')
+                       else input if isinstance(input, dict)
+                       else {})
+                )
+            )
+        ),
+        LangChainTool(
+            name="generate_review_response",
+            description=(
+                "Generate personalized responses to customer reviews with appropriate tone and sentiment handling. "
+                "Input must be a JSON string or dict with REQUIRED keys: 'business_id' (string), 'review_text' (string - cannot be empty), and optional 'response_tone' (string from: 'professional', 'friendly', 'formal'). "
+                "Example: {\"business_id\": \"ABC123\", \"review_text\": \"Great food but slow service\", \"response_tone\": \"professional\"}"
+            ),
+            func=lambda input: (
+                print(f"[TOOL CALLED] generate_review_response with input: {input}") or
+                review_response_tool(
+                    **(json.loads(input) if isinstance(input, str) and input.strip().startswith('{')
+                       else input if isinstance(input, dict)
+                       else {})
+                )
             )
         )
-    )
-
-
-    
     ]
-
     return langchain_tools
 
 # 3. Create the LangChain agent with ChromaDB
@@ -247,6 +278,11 @@ You must use the exact input format for each tool below. Do not invent or guess 
 - get_business_info: Input must be a string (business_id). 
 - analyze_aspects: Input must be a string (business_id).
 - business_fuzzy_search: Input must be a string (query) or a dict with 'query' (string) and optional 'top_n' (int). 
+- create_action_plan: Input must be a JSON string or dict with 'business_id', 'goals' (list), 'constraints' (dict), 'priority_issues' (list). Example: {{{{"business_id": "ABC123", "goals": ["improve_customer_satisfaction"], "constraints": {{"budget": 5000, "timeline_weeks": 8}}, "priority_issues": ["quality", "service"]}}}}
+- generate_review_response: Input must be a JSON string or dict with 'business_id', 'review_text', and optional 'response_tone'. Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
+- create_action_plan: Input must be a JSON string or dict with optional keys: 'business_id' (string), 'goals' (list of strings), 'constraints' (dict with 'budget' number and 'timeline_weeks' number), 'priority_issues' (list of strings from: 'quality', 'service', 'value', 'customer_experience'). Example: {{{{"business_id": "ABC123", "goals": ["improve_customer_satisfaction"], "constraints": {{"budget": 5000, "timeline_weeks": 8}}, "priority_issues": ["quality", "service"]}}}}
+- generate_review_response: Input must be a JSON string or dict with REQUIRED keys: 'business_id' (string), 'review_text' (string - cannot be empty), and optional 'response_tone' (string from: 'professional', 'friendly', 'formal'). Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
+
 
 You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
 
