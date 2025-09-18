@@ -3,6 +3,8 @@ import sys
 import logging
 import os
 from pathlib import Path
+from datetime import datetime
+import json
 from langchain_agent_chromadb import create_business_agent_chromadb, create_llm_instance
 from gemini_llm import GeminiConfig
 from config.api_keys import APIKeyManager, setup_api_keys_interactive, load_dotenv
@@ -26,10 +28,10 @@ st.set_page_config(
 def initialize_session_state():
     if "agent_executor" not in st.session_state:
         st.session_state.agent_executor = None
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = ""
+    if "conversations" not in st.session_state:
+        st.session_state.conversations = {}
+    if "current_conversation_id" not in st.session_state:
+        st.session_state.current_conversation_id = None
     if "agent_loaded" not in st.session_state:
         st.session_state.agent_loaded = False
     
@@ -43,6 +45,55 @@ def initialize_session_state():
     if "current_llm_instance" not in st.session_state:
         st.session_state.current_llm_instance = None
 
+# Conversation management functions
+def create_new_conversation():
+    """Create a new conversation and return its ID"""
+    conversation_id = f"conv_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    st.session_state.conversations[conversation_id] = {
+        "id": conversation_id,
+        "title": "New Conversation",
+        "messages": [],
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat()
+    }
+    return conversation_id
+
+def get_current_conversation():
+    """Get the current conversation or create one if none exists"""
+    if not st.session_state.current_conversation_id:
+        conversation_id = create_new_conversation()
+        st.session_state.current_conversation_id = conversation_id
+    
+    return st.session_state.conversations.get(st.session_state.current_conversation_id, {})
+
+def update_conversation_title(conversation_id, first_message):
+    """Update conversation title based on first message"""
+    if conversation_id in st.session_state.conversations:
+        # Take first 30 characters of the first message as title
+        title = first_message[:30] + "..." if len(first_message) > 30 else first_message
+        st.session_state.conversations[conversation_id]["title"] = title
+        st.session_state.conversations[conversation_id]["updated_at"] = datetime.now().isoformat()
+
+def delete_conversation(conversation_id):
+    """Delete a conversation"""
+    if conversation_id in st.session_state.conversations:
+        del st.session_state.conversations[conversation_id]
+        
+        # If we deleted the current conversation, switch to another or create new
+        if st.session_state.current_conversation_id == conversation_id:
+            if st.session_state.conversations:
+                # Switch to the most recent conversation
+                most_recent = max(st.session_state.conversations.keys(), 
+                                key=lambda x: st.session_state.conversations[x]["updated_at"])
+                st.session_state.current_conversation_id = most_recent
+            else:
+                # Create a new conversation if none exist
+                st.session_state.current_conversation_id = create_new_conversation()
+
+def switch_conversation(conversation_id):
+    """Switch to a different conversation"""
+    st.session_state.current_conversation_id = conversation_id
+
 # Load agent
 def load_agent(model_type, gemini_config=None):
     try:
@@ -51,13 +102,12 @@ def load_agent(model_type, gemini_config=None):
             gemini_config=gemini_config,
             local_model_name="Qwen/Qwen2.5-1.5B-Instruct",
             use_4bit=False,
-            max_iterations=15,  # Fixed higher iteration count
+            max_iterations=15,
             verbose=True
         )
     except Exception as e:
         st.error(f"Error loading agent: {str(e)}")
         return None
-
 
 # Check API key status
 def check_api_key_status():
@@ -79,7 +129,6 @@ def check_api_key_status():
             status['gemini']['valid'] = False
     
     return status
-
 
 # Model selection UI
 def render_model_selection():
@@ -144,7 +193,59 @@ def render_model_selection():
     
     return model_type
 
-
+# Render conversations list in sidebar
+def render_conversations_sidebar():
+    st.markdown("---")
+    
+    # Header with new chat button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.subheader("Chat History")
+    with col2:
+        if st.button("➕", help="New conversation", key="new_chat"):
+            conversation_id = create_new_conversation()
+            st.session_state.current_conversation_id = conversation_id
+            st.rerun()
+    
+    # Show conversations list
+    if not st.session_state.conversations:
+        st.text("No conversations yet...")
+        return
+    
+    # Sort conversations by updated_at (most recent first)
+    sorted_conversations = sorted(
+        st.session_state.conversations.items(),
+        key=lambda x: x[1]["updated_at"],
+        reverse=True
+    )
+    
+    for conv_id, conv_data in sorted_conversations:
+        # Create container for each conversation
+        with st.container():
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                # Make conversation title clickable
+                is_current = conv_id == st.session_state.current_conversation_id
+                
+                if st.button(
+                    conv_data["title"],
+                    key=f"conv_{conv_id}",
+                    help=f"Switch to this conversation",
+                    type="primary" if is_current else "secondary",
+                    use_container_width=True
+                ):
+                    if not is_current:
+                        switch_conversation(conv_id)
+                        st.rerun()
+            
+            with col2:
+                # Delete button
+                if st.button("🗑️", key=f"del_{conv_id}", help="Delete conversation"):
+                    delete_conversation(conv_id)
+                    st.rerun()
+        
+    
 
 def main():
     initialize_session_state()
@@ -152,16 +253,15 @@ def main():
     # Sidebar
     with st.sidebar:
         st.title("🤖 Business Agent")
-        st.markdown("---")
         
         # Model selection
         current_model_type = render_model_selection()
         
-        st.markdown("---")
+      
         
         # Agent status and loading
         if st.session_state.agent_executor is None:
-            if st.button("Load Agent", type="primary"):
+            if st.button("Load Agent", type="primary", use_container_width=True):
                 with st.spinner("Loading agent..."):
                     gemini_config = GeminiConfig(temperature=0.1, max_output_tokens=2048)
                     
@@ -176,15 +276,13 @@ def main():
                         
                         # Try to store the LLM instance for performance tracking
                         try:
-                            # Extract the LLM from the agent creation process
-                            # This will help us access performance stats later
                             llm_instance = create_llm_instance(
                                 model_type=st.session_state.model_type,
                                 gemini_config=gemini_config
                             )
                             st.session_state.current_llm_instance = llm_instance
                         except Exception:
-                            pass  # Not critical if we can't store the LLM instance
+                            pass
                         
                         # Update model info
                         if st.session_state.model_type == "local":
@@ -215,87 +313,16 @@ def main():
                                     st.metric("Fallback Usage", stats.get('fallback_uses', 0))
                                     st.metric("Primary Failures", stats.get('primary_failures', 0))
                 except Exception:
-                    pass  # Ignore stats errors
+                    pass
         
-        st.markdown("---")
+        # Render conversations list
+        render_conversations_sidebar()
         
-        # Chat controls
-        if st.button("Clear Chat"):
-            st.session_state.messages = []
-            st.session_state.chat_history = ""
+        # Global controls at bottom
+        if st.button("Clear All Conversations", help="Delete all conversations"):
+            st.session_state.conversations = {}
+            st.session_state.current_conversation_id = None
             st.rerun()
-        
-        if st.button("Restart Agent"):
-            st.session_state.agent_executor = None
-            st.session_state.agent_loaded = False
-            st.session_state.messages = []
-            st.session_state.chat_history = ""
-            # Clear the stored LLM instance
-            if 'current_llm_instance' in st.session_state:
-                del st.session_state.current_llm_instance
-            st.rerun()
-        
-        st.markdown("---")
-        
-        # Chat statistics
-        st.subheader("📈 Chat Stats")
-        st.metric("Messages", len(st.session_state.messages))
-        
-        # Model status
-        st.subheader("🔧 Model Status")
-        if st.session_state.api_key_status:
-            if st.session_state.api_key_status.get('gemini', {}).get('valid', False):
-                st.success("✓ Gemini API Ready")
-            else:
-                st.warning("⚠️ Gemini API Not Available")
-        
-        # Database status
-        st.subheader("🗄️ Database Status")
-        try:
-            import sys
-            from pathlib import Path
-            sys.path.append(str(Path(__file__).parent))
-            from database.db_manager import get_db_manager
-            
-            db_manager = get_db_manager()
-            
-            # Test database connectivity
-            business_count = db_manager.execute_query("SELECT COUNT(*) as count FROM businesses")
-            
-            if not business_count.empty and business_count.iloc[0, 0] > 0:
-                st.success("✓ DuckDB Connected")
-                st.metric("Businesses", f"{business_count.iloc[0, 0]:,}")
-                
-                # Try to get review count (optional)
-                try:
-                    review_count = db_manager.execute_query("SELECT COUNT(*) as count FROM reviews")
-                    if not review_count.empty and review_count.iloc[0, 0] > 0:
-                        st.metric("Reviews", f"{review_count.iloc[0, 0]:,}")
-                    else:
-                        st.info("Reviews: Not loaded")
-                except:
-                    st.info("Reviews: Not available")
-                
-                # Get performance stats
-                stats = db_manager.get_performance_stats()
-                if stats.get('total_queries', 0) > 0:
-                    st.metric("DB Queries", stats['total_queries'])
-                
-                st.metric("DB Size", f"{stats.get('database_size_mb', 0):.1f} MB")
-                
-            else:
-                st.warning("⚠️ DuckDB Not Set Up")
-                st.info("💡 Run: `python migration/setup_database.py`")
-                
-        except Exception as e:
-            st.error(f"❌ DuckDB Setup Needed")
-            st.info("💡 Run: `python migration/setup_database.py`")
-        
-        # Debug info (collapsible)
-        with st.expander("ℹ️ System Info"):
-            st.text(f"Agent loaded: {st.session_state.agent_loaded}")
-            st.text(f"Model type: {st.session_state.model_type}")
-            st.text(f"Chat history length: {len(st.session_state.chat_history)}")
     
     # Main chat interface
     st.title("Business Agent Chat")
@@ -303,8 +330,6 @@ def main():
     # Display current model in header
     if st.session_state.agent_loaded:
         st.info(f"🤖 Currently using: **{st.session_state.current_model_info}**")
-    
-    st.markdown("Ask me anything about business, and I'll help you with insights and analysis.")
     
     # Check if agent is loaded
     if not st.session_state.agent_executor:
@@ -322,55 +347,85 @@ def main():
         """)
         return
     
-    # Display chat messages
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    # Get current conversation
+    current_conv = get_current_conversation()
+    current_messages = current_conv.get("messages", [])
+    
+    # Show current conversation title
+    if current_conv.get("title", "") != "New Conversation":
+        st.subheader(f"💭 {current_conv['title']}")
+    else:
+        st.markdown("Ask me anything about business, and I'll help you with insights and analysis.")
+    
+    
+    for message in current_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
     
     # Chat input
     if prompt := st.chat_input("What would you like to know?"):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        # Ensure we have a current conversation
+        if not st.session_state.current_conversation_id:
+            st.session_state.current_conversation_id = create_new_conversation()
         
-        # Display user message
+        conv_id = st.session_state.current_conversation_id
+        
+        # Add user message to current conversation
+        user_message = {"role": "user", "content": prompt}
+        st.session_state.conversations[conv_id]["messages"].append(user_message)
+        
+        # Update conversation title if this is the first message
+        if len(st.session_state.conversations[conv_id]["messages"]) == 1:
+            update_conversation_title(conv_id, prompt)
+        
+        
+      
+        
+        # Display user message immediately
         with st.chat_message("user"):
             st.markdown(prompt)
         
         # Generate agent response
         with st.chat_message("assistant"):
-            message_placeholder = st.empty()
             
-            try:
-                with st.spinner("Thinking..."):
-                    # Call the agent
-                    response = st.session_state.agent_executor.invoke({
-                        "input": prompt,
-                        "chat_history": st.session_state.chat_history
-                    })
-                    
-                    agent_reply = response.get("output", "I apologize, but I couldn't generate a response.")
-                    
-                    # Display the response
-                    message_placeholder.markdown(agent_reply)
-                    
-                    
-                    # Update chat history
-                    st.session_state.chat_history += f"User: {prompt}\nAgent: {agent_reply}\n"
-                    
-                    # Add assistant message to session
-                    st.session_state.messages.append({"role": "assistant", "content": agent_reply})
-                    
-            except Exception as e:
-                error_message = f"Error: {str(e)}"
-                message_placeholder.error(error_message)
-                st.session_state.messages.append({"role": "assistant", "content": error_message})
-    
-    # Show chat history in expander (for debugging)
-    if st.session_state.chat_history:
-        with st.expander("View Raw Chat History"):
-            st.text(st.session_state.chat_history)
+                message_placeholder = st.empty()
+                
+                try:
+                    with st.spinner("Thinking..."):
+                        # Build chat history from current conversation
+                        chat_history = ""
+                        for msg in current_messages:
+                            role = "User" if msg["role"] == "user" else "Agent"
+                            chat_history += f"{role}: {msg['content']}\n"
+                        chat_history += f"User: {prompt}\n"
+                        
+                        # Call the agent
+                        response = st.session_state.agent_executor.invoke({
+                            "input": prompt,
+                            "chat_history": chat_history
+                        })
+                        
+                        agent_reply = response.get("output", "I apologize, but I couldn't generate a response.")
+                        
+                        # Display the response
+                        message_placeholder.markdown(agent_reply)
+                        
+                        # Add assistant message to current conversation
+                        assistant_message = {"role": "assistant", "content": agent_reply}
+                        st.session_state.conversations[conv_id]["messages"].append(assistant_message)
+                        
+                       
+                        
+                        # Rerun to update sidebar
+                        st.rerun()
+                        
+                except Exception as e:
+                    error_message = f"Error: {str(e)}"
+                    message_placeholder.error(error_message)
+                    # Add error message to conversation
+                    error_msg = {"role": "assistant", "content": error_message}
+                    st.session_state.conversations[conv_id]["messages"].append(error_msg)
+                    st.rerun()
 
 if __name__ == "__main__":
     main()
