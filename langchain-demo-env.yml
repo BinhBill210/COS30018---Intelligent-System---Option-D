@@ -68,7 +68,6 @@ dependencies:
       
       # Optional: Additional ML/NLP tools
       - accelerate>=0.26.0
-      - protobuf>=6.32.0
       
       # For better performance (optional)
       - psutil>=7.0.0
@@ -76,7 +75,6 @@ dependencies:
       # Environment management
       - python-dotenv>=1.1.0
       - ijson>=3.4.0
-      - streamlit
       - rapidfuzz
       - keyring>=24.0.0
 
