@@ -81,9 +81,6 @@ def create_llm_instance(
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
-
-
-
 # 2. Convert tools to LangChain tools with ChromaDB support
 def create_langchain_tools_chromadb():
     """Convert tools to LangChain format using ChromaDB"""
@@ -92,8 +89,6 @@ def create_langchain_tools_chromadb():
     from tools.data_summary_tool import DataSummaryTool
     from tools.business_search_tool import BusinessSearchTool
     from tools.aspect_analysis import AspectABSAToolHF
-    from tools.ActionPlanner import ActionPlannerTool
-    from tools.ReviewResponseTool import ReviewResponseTool
 
     chroma_host=os.environ.get("CHROMA_HOST", "localhost")
     
@@ -104,8 +99,6 @@ def create_langchain_tools_chromadb():
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
     business_tool = BusinessSearchTool(host=chroma_host)
     aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
-    action_planner_tool = ActionPlannerTool()
-    review_response_tool = ReviewResponseTool()
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
@@ -186,41 +179,14 @@ def create_langchain_tools_chromadb():
                     (json.loads(input).get("business_id")
                     if isinstance(input, str) and input.strip().startswith("{")
                     else str(input).strip())
-                )
-            )
-        ),
-        LangChainTool(
-            name="create_action_plan",
-            description=(
-                "Generate an actionable business improvement plan. Input must be a JSON string or dict with optional keys: 'business_id' (string), 'goals' (list of strings), 'constraints' (dict with 'budget' number and 'timeline_weeks' number), 'priority_issues' (list of strings from: 'quality', 'service', 'value', 'customer_experience'). "
-                "Example: {\"business_id\": \"ABC123\", \"goals\": [\"improve_customer_satisfaction\"], \"constraints\": {\"budget\": 5000, \"timeline_weeks\": 8}, \"priority_issues\": [\"quality\", \"service\"]}"
-            ),
-            func=lambda input: (
-                print(f"[TOOL CALLED] create_action_plan with input: {input}") or
-                action_planner_tool(
-                    **(json.loads(input) if isinstance(input, str) and input.strip().startswith('{')
-                       else input if isinstance(input, dict)
-                       else {})
-                )
-            )
-        ),
-        LangChainTool(
-            name="generate_review_response",
-            description=(
-                "Generate personalized responses to customer reviews with appropriate tone and sentiment handling. "
-                "Input must be a JSON string or dict with REQUIRED keys: 'business_id' (string), 'review_text' (string - cannot be empty), and optional 'response_tone' (string from: 'professional', 'friendly', 'formal'). "
-                "Example: {\"business_id\": \"ABC123\", \"review_text\": \"Great food but slow service\", \"response_tone\": \"professional\"}"
-            ),
-            func=lambda input: (
-                print(f"[TOOL CALLED] generate_review_response with input: {input}") or
-                review_response_tool(
-                    **(json.loads(input) if isinstance(input, str) and input.strip().startswith('{')
-                       else input if isinstance(input, dict)
-                       else {})
-                )
             )
         )
+    )
+
+
+    
     ]
+
     return langchain_tools
 
 # 3. Create the LangChain agent with ChromaDB
@@ -259,7 +225,9 @@ def create_business_agent_chromadb(
     
     # Create custom prompt template for ReAct pattern
     react_prompt = PromptTemplate.from_template("""
+
 You are a business review analysis agent with access to a vector database of reviews and business information.
+Your mission is to analyze customer reviews and business data to identify insights, trends, and areas for improvement.
 You can search for relevant reviews, analyze sentiment, provide data summaries, and answer questions about businesses.
 
 TOOLS:
@@ -279,48 +247,44 @@ You must use the exact input format for each tool below. Do not invent or guess 
 - get_business_info: Input must be a string (business_id). 
 - analyze_aspects: Input must be a string (business_id).
 - business_fuzzy_search: Input must be a string (query) or a dict with 'query' (string) and optional 'top_n' (int). 
-- create_action_plan: Input must be a JSON string or dict with 'business_id', 'goals' (list), 'constraints' (dict), 'priority_issues' (list). Example: {{{{"business_id": "ABC123", "goals": ["improve_customer_satisfaction"], "constraints": {{"budget": 5000, "timeline_weeks": 8}}, "priority_issues": ["quality", "service"]}}}}
-- generate_review_response: Input must be a JSON string or dict with 'business_id', 'review_text', and optional 'response_tone'. Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
-- create_action_plan: Input must be a JSON string or dict with optional keys: 'business_id' (string), 'goals' (list of strings), 'constraints' (dict with 'budget' number and 'timeline_weeks' number), 'priority_issues' (list of strings from: 'quality', 'service', 'value', 'customer_experience'). Example: {{{{"business_id": "ABC123", "goals": ["improve_customer_satisfaction"], "constraints": {{"budget": 5000, "timeline_weeks": 8}}, "priority_issues": ["quality", "service"]}}}}
-- generate_review_response: Input must be a JSON string or dict with REQUIRED keys: 'business_id' (string), 'review_text' (string - cannot be empty), and optional 'response_tone' (string from: 'professional', 'friendly', 'formal'). Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
-
 
 You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
 
 REASONING AND OUTPUT:
-You must only reason based on the actual output (Observation) from the tools. Do not hallucinate, invent, or assume information that is not present in the tool output. If the tool output is empty, say so. If the tool output is unclear, do not guess.
+You must only reason based on the actual output (Observation) from the tools. Never invent reviews, ratings, or business info. If the tool does not return data, you must explicitly state that the information is unavailable. If the tool output is empty, explicitly say so. If the tool output is unclear, do not guess.
+When tools return little or nothing, Be explicit: say "No relevant reviews were returned" (or similar), list what you tried (tools & queries), and suggest next steps (different keywords, broaden timeframe, confirm business).
 
+Begin!
 To use a tool, use the following format for each tool you use:
 
-```
+
 Thought: [Your reasoning about which tool(s) to use and why]
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action (strictly follow the required format above)
-```
+
 
 If you need to use multiple tools, repeat the Thought/Action/Action Input block for each tool, and update your Thought after each Observation.
 
 When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
 
-```
+
 Thought: [Your reasoning about why no further tools are needed]
 Final Answer: [your response here]
-```
+
 
 Available capabilities:
-- search_reviews: Find relevant reviews using semantic similarity (powered by ChromaDB)
-- analyze_sentiment: Analyze sentiment patterns in review texts
-- get_data_summary: Get statistical summaries of review data
-- get_business_id: Get the business_id for a given business name
-- search_businesses: Semantic search for businesses by description or name
-- get_business_info: Get general info for a business_id
-- analyze_aspects: Analyze aspects of a list of reviews from a business_id
-- business_fuzzy_search: Fuzzy search for businesses by name
-- create_action_plan: Generate comprehensive business improvement plans with actions, timelines, costs, and KPIs
-- generate_review_response: Create personalized, professional responses to customer reviews with sentiment analysis
+- Search reviews(Tool name: search_review): Find relevant reviews using semantic similarity (powered by ChromaDB)
+- Analyze sentiment(Tool name: analyze_sentiment): Analyze sentiment patterns in review texts
+- Get data summary(Tool name: get_data_summary): Get statistical summaries of review data
+- Get business id(Tool name: get_business_id) Get the business_id for a given business name
+- Search businesses(Tool name: search_business): Semantic search for businesses by description or name
+- Get business info(Tool name: get_business_info): Get general info for a business_id, after get the output from the tool, rather than giving the raw format of the output, you should reformatting the output to make your answer have a better format for users to read it
+- Analyze aspects(Tool name: analyze_aspects): Analyze aspects of a list of reviews from a business_id
+- Business fuzzy search(Tool name: business_fuzzy_search): Fuzzy search for businesses by name
 
 
-Begin!
+When giving the Final Answer, write in a clear, professional, and structured style (use bullet points, headings, and short paragraphs). Avoid raw JSON or unformatted tool output. For example, instead of search_review, answer it with Search reviews
+
 
 Previous conversation history:
 {chat_history}
