@@ -10,10 +10,7 @@ def test_aspect_absa_tool():
     business_id ="XQfwVwDr-v0ZS3_CbbE5Xw"
     print(f"- business_id: {business_id}")
 
-    tool = AspectABSAToolHF(
-        business_data_path="data/processed/business_cleaned.parquet",
-        review_data_path="data/processed/review_cleaned.parquet",
-    )
+    tool = AspectABSAToolHF()
 
     reviews = tool.read_data(business_id=business_id)
     print(f"- Loaded {len(reviews)} reviews")

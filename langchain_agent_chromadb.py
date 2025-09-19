@@ -100,7 +100,7 @@ def create_langchain_tools_chromadb():
     sentiment_tool = SentimentSummaryTool()
     data_tool = DataSummaryTool("data/processed/review_cleaned.parquet")
     business_tool = BusinessSearchTool(host=chroma_host)
-    aspect_tool = AspectABSAToolHF("data/processed/business_cleaned.parquet", "data/processed/review_cleaned.parquet")
+    aspect_tool = AspectABSAToolHF()
     action_planner_tool = ActionPlannerTool()
     review_response_tool = ReviewResponseTool()
     # Convert to LangChain tools
