@@ -1,24 +1,27 @@
 from typing import List, Optional, Dict, Any
 import pandas as pd
 from transformers import pipeline
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.append(str(Path(__file__).parent.parent))
+from database.db_manager import get_db_manager
 
 class AspectABSAToolHF:
-    def __init__(
-        self,
-        business_data_path: str = "data/processed/business_cleaned.parquet",
-        review_data_path: str = "data/processed/review_cleaned.parquet",
-    ):
-        """Initialize with business and review data - consistent with other tools"""
-        self.business_df = (
-            pd.read_parquet(business_data_path)
-            if business_data_path.endswith(".parquet")
-            else pd.read_csv(business_data_path)
-        )
-        self.review_df = (
-            pd.read_parquet(review_data_path)
-            if review_data_path.endswith(".parquet")
-            else pd.read_csv(review_data_path)
-        )
+    def __init__(self):
+        """Initialize with DuckDB database access"""
+        self.db_manager = get_db_manager()
+        
+        # Check if database tables exist
+        try:
+            business_count = self.db_manager.execute_query("SELECT COUNT(*) as count FROM businesses")
+            review_count = self.db_manager.execute_query("SELECT COUNT(*) as count FROM reviews")
+            print(f"[INFO] Connected to DuckDB - {business_count.iloc[0, 0]:,} businesses, {review_count.iloc[0, 0]:,} reviews")
+            self.db_available = True
+        except Exception as e:
+            print(f"[ERROR] Cannot access DuckDB tables: {e}")
+            self.db_available = False
 
         # Implement model pipeline
         self.pipe = pipeline(
@@ -32,47 +35,49 @@ class AspectABSAToolHF:
         """
         Return: List[{"review_id","text","business_id"}]
         """
-        df = self.review_df
+        if not self.db_available:
+            print("[ERROR] read_data: DuckDB not available")
+            return []
 
-        # Normalize dtypes/whitespace once before filtering
-        if "business_id" in df.columns:
-            df = df.copy()  # avoid SettingWithCopy
-            df["business_id"] = df["business_id"].astype(str).str.strip()
-        if "review_id" in df.columns:
-            df["review_id"] = df["review_id"].astype(str).str.strip()
+        try:
+            # Build SQL query based on business_id parameter
+            if business_id is not None:
+                bid = str(business_id).strip()
+                query = """
+                SELECT review_id, text, business_id 
+                FROM reviews 
+                WHERE business_id = ? 
+                LIMIT 1000
+                """
+                df = self.db_manager.execute_query(query, [bid])
+                print(f"[DEBUG] read_data: found {len(df)} reviews for business_id='{bid}'")
+            else:
+                query = """
+                SELECT review_id, text, business_id 
+                FROM reviews 
+                LIMIT 1000
+                """
+                df = self.db_manager.execute_query(query)
+                print(f"[DEBUG] read_data: no business_id provided, returning {len(df)} reviews")
 
-        if business_id is not None:
-            bid = str(business_id).strip()
-            before = len(df)
-            df = df[df["business_id"] == bid]
-            print(f"[DEBUG] read_data: filtered {len(df)}/{before} rows for business_id='{bid}'")
-        else:
-            print(f"[DEBUG] read_data: no business_id provided, returning all {len(df)} rows")
+            out: List[Dict[str, Any]] = []
+            if df.empty:
+                return out
 
-        out: List[Dict[str, Any]] = []
-        if df.empty:
-            return out
-
-        # choose a text column
-        text_col = None
-        for c in ("text", "review_text", "content", "body", "text_clean"):
-            if c in df.columns:
-                text_col = c
-                break
-        if text_col is None:
-            print(f"[WARN] read_data: no text-like column found in columns={list(df.columns)}")
-            return out
-
-        for _, row in df.iterrows():
-            t = row.get(text_col, "")
-            out.append(
-                {
+            # Convert DataFrame to required format
+            for _, row in df.iterrows():
+                text = row.get("text", "")
+                out.append({
                     "review_id": str(row.get("review_id", "")),
-                    "text": "" if t is None else str(t),
+                    "text": "" if text is None else str(text),
                     "business_id": row.get("business_id", None),
-                }
-            )
-        return out
+                })
+            
+            return out
+            
+        except Exception as e:
+            print(f"[ERROR] read_data: Database query failed: {e}")
+            return []
 
     # Analyze aspects
     def analyze_aspects(self, reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
