@@ -91,6 +91,8 @@ def create_langchain_tools_chromadb():
     from tools.aspect_analysis import AspectABSAToolHF
     from tools.ActionPlanner import ActionPlannerTool
     from tools.ReviewResponseTool import ReviewResponseTool
+    from tools.hybrid_retrieval_tool import HybridRetrieve
+    from tools.business_pulse import BusinessPulse
 
     chroma_host=os.environ.get("CHROMA_HOST", "localhost")
     
@@ -103,6 +105,8 @@ def create_langchain_tools_chromadb():
     aspect_tool = AspectABSAToolHF()
     action_planner_tool = ActionPlannerTool()
     review_response_tool = ReviewResponseTool()
+    hybrid_tool = HybridRetrieve("data/processed/review_cleaned.parquet", "./chroma_db")
+    pulse_tool = BusinessPulse("data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
         LangChainTool(
@@ -222,6 +226,37 @@ def create_langchain_tools_chromadb():
                     **(json.loads(input) if isinstance(input, str) and input.strip().startswith('{')
                        else input if isinstance(input, dict)
                        else {})
+                )
+            )
+        ),
+        LangChainTool(
+            name="hybrid_retrieve",
+            description="Advanced hybrid semantic+lexical retrieval with evidence. Input should be dict with 'business_id', 'query', optional 'top_k' (default 10), and optional 'filters' for date/stars filtering.",
+            func=lambda input: (
+                print(f"[TOOL CALLED] hybrid_retrieve with input: {input}") or
+                (
+                    hybrid_tool(
+                        business_id=input.get("business_id", ""),
+                        query=input.get("query", ""),
+                        top_k=input.get("top_k", 10),
+                        filters=input.get("filters", None)
+                    ) if isinstance(input, dict)
+                    else {"error": "hybrid_retrieve requires dict input with business_id and query"}
+                )
+            )
+        ),
+        LangChainTool(
+            name="business_pulse",
+            description="Get business overview and health metrics. Input should be dict with 'business_id' and optional 'time_range' ('3M', '6M', '1Y', 'all').",
+            func=lambda input: (
+                print(f"[TOOL CALLED] business_pulse with input: {input}") or
+                (
+                    pulse_tool(
+                        business_id=input.get("business_id", ""),
+                        time_range=input.get("time_range", "all")
+                    ) if isinstance(input, dict)
+                    else pulse_tool(business_id=input, time_range="all") if isinstance(input, str)
+                    else {"error": "business_pulse requires business_id as string or dict"}
                 )
             )
         )

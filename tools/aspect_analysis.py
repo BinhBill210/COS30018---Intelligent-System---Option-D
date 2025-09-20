@@ -23,12 +23,25 @@ class AspectABSAToolHF:
             print(f"[ERROR] Cannot access DuckDB tables: {e}")
             self.db_available = False
 
-        # Implement model pipeline
-        self.pipe = pipeline(
-            task="ner",
-            model="gauneg/deberta-v3-base-absa-ate-sentiment",
-            aggregation_strategy="simple",
-        )
+        # Implement model pipeline with proper error handling
+        try:
+            import torch
+            # Set device explicitly to avoid meta tensor issues
+            device = "cpu"  # Force CPU to avoid device mapping issues
+            
+            self.pipe = pipeline(
+                task="ner",
+                model="gauneg/deberta-v3-base-absa-ate-sentiment",
+                aggregation_strategy="simple",
+                device=device
+            )
+            self.model_available = True
+            print(f"[INFO] ABSA model loaded successfully on {device}")
+        except Exception as e:
+            print(f"[WARNING] Failed to load ABSA model: {e}")
+            print("[INFO] AspectABSAToolHF will use basic keyword analysis")
+            self.pipe = None
+            self.model_available = False
 
     # Take reviews from 1 business id
     def read_data(self, business_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -92,6 +105,10 @@ class AspectABSAToolHF:
         if not reviews:
             return {"aspects": {}, "representative_snippets": {}, "evidence": {}}
         
+        # If model is not available, use basic analysis
+        if not self.model_available or self.pipe is None:
+            return self._basic_aspect_analysis(reviews)
+        
         MAX_ASPECTS   = 10
         MAX_EVIDENCE  = 1
         
@@ -109,7 +126,11 @@ class AspectABSAToolHF:
             if not text:
                 continue
 
-            ents = self.pipe(text)  # [{'entity_group':'pos/neg/neu','score':..,'word':..}, ...]
+            try:
+                ents = self.pipe(text)  # [{'entity_group':'pos/neg/neu','score':..,'word':..}, ...]
+            except Exception as e:
+                print(f"[ERROR] Model inference failed: {e}")
+                continue
             for ent in ents:
                 asp = (ent.get("word") or "").lower().strip()
                 if not asp or len(asp) < 2: #delete the aspect that only have 1 or 2 words
@@ -162,4 +183,76 @@ class AspectABSAToolHF:
             "aspects": aspects,
             "representative_snippets": representative_snippets,
             "evidence": evidence,
+        }
+
+    def _basic_aspect_analysis(self, reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Basic aspect analysis without ML model - uses keyword matching
+        """
+        print("[INFO] Using basic aspect analysis (no ML model)")
+        
+        # Basic aspect keywords
+        aspect_keywords = {
+            "food": ["food", "taste", "flavor", "delicious", "meal", "dish", "cuisine", "pizza", "burger"],
+            "service": ["service", "staff", "waiter", "waitress", "server", "friendly", "rude", "slow"],
+            "price": ["price", "cost", "expensive", "cheap", "value", "money", "affordable"],
+            "ambiance": ["atmosphere", "ambiance", "decoration", "music", "lighting", "cozy"],
+            "location": ["location", "parking", "convenient", "accessible", "downtown"]
+        }
+        
+        # Sentiment keywords
+        positive_words = ["good", "great", "excellent", "amazing", "wonderful", "love", "best", "perfect", "awesome"]
+        negative_words = ["bad", "terrible", "awful", "worst", "hate", "disappointing", "poor", "horrible"]
+        
+        aspects = {}
+        representative_snippets = {}
+        evidence = {}
+        
+        for aspect, keywords in aspect_keywords.items():
+            aspect_reviews = []
+            pos_count = 0
+            neg_count = 0
+            neu_count = 0
+            
+            for review in reviews[:100]:  # Limit to first 100 reviews
+                text = (review.get("text") or "").lower()
+                if any(keyword in text for keyword in keywords):
+                    aspect_reviews.append(review)
+                    
+                    # Simple sentiment analysis
+                    pos_score = sum(1 for word in positive_words if word in text)
+                    neg_score = sum(1 for word in negative_words if word in text)
+                    
+                    if pos_score > neg_score:
+                        pos_count += 1
+                    elif neg_score > pos_score:
+                        neg_count += 1
+                    else:
+                        neu_count += 1
+            
+            if aspect_reviews:
+                total = len(aspect_reviews)
+                aspects[aspect] = {
+                    "positive": round((pos_count / total) * 100, 1),
+                    "negative": round((neg_count / total) * 100, 1),
+                    "neutral": round((neu_count / total) * 100, 1)
+                }
+                
+                representative_snippets[aspect] = [
+                    r.get("text", "")[:200] + "..." if len(r.get("text", "")) > 200 else r.get("text", "")
+                    for r in aspect_reviews[:3]
+                ]
+                
+                evidence[aspect] = [{
+                    "review": r.get("text", "")[:200] + "..." if len(r.get("text", "")) > 200 else r.get("text", ""),
+                    "score": 0.5,  # Neutral score for basic analysis
+                    "id": r.get("review_id", "")
+                } for r in aspect_reviews[:1]]
+        
+        return {
+            "aspects": aspects,
+            "representative_snippets": representative_snippets,
+            "evidence": evidence,
+            "analysis_type": "basic_keyword_matching",
+            "note": "Basic analysis without ML model - limited accuracy"
         }

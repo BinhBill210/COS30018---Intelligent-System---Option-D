@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import json
-from langchain_agent_chromadb import create_business_agent_chromadb, create_llm_instance
+from langchain_agent_chromadb import create_business_agent_chromadb, create_llm_instance, create_langchain_tools_chromadb
 from gemini_llm import GeminiConfig
 from config.api_keys import APIKeyManager, setup_api_keys_interactive, load_dotenv
 from config.logging_config import setup_logging, get_performance_logger
@@ -44,6 +44,12 @@ def initialize_session_state():
         st.session_state.api_key_status = {}
     if "current_llm_instance" not in st.session_state:
         st.session_state.current_llm_instance = None
+    
+    # Tool tracking
+    if "last_tool_calls" not in st.session_state:
+        st.session_state.last_tool_calls = []
+    if "tool_usage_history" not in st.session_state:
+        st.session_state.tool_usage_history = []
 
 # Conversation management functions
 def create_new_conversation():
@@ -108,6 +114,83 @@ def load_agent(model_type, gemini_config=None):
     except Exception as e:
         st.error(f"Error loading agent: {str(e)}")
         return None
+
+
+# Parse tool calls from agent response
+def parse_tool_calls_from_response(response):
+    """Extract tool calls from agent response"""
+    tool_calls = []
+    
+    try:
+        # Method 1: Check for intermediate steps in response
+        if 'intermediate_steps' in response:
+            for step in response['intermediate_steps']:
+                if len(step) >= 2:
+                    action, observation = step
+                    if hasattr(action, 'tool') and hasattr(action, 'tool_input'):
+                        tool_calls.append({
+                            'tool_name': action.tool,
+                            'input': str(action.tool_input)[:200] + "..." if len(str(action.tool_input)) > 200 else str(action.tool_input),
+                            'output': str(observation)[:200] + "..." if len(str(observation)) > 200 else str(observation)
+                        })
+    except Exception:
+        pass
+    
+    # Method 2: Parse from output text (fallback)
+    if not tool_calls:
+        try:
+            output_text = response.get('output', '')
+            if '[TOOL CALLED]' in output_text:
+                lines = output_text.split('\n')
+                for line in lines:
+                    if '[TOOL CALLED]' in line:
+                        try:
+                            parts = line.split('[TOOL CALLED]')[1].strip()
+                            if ' with input:' in parts:
+                                tool_name = parts.split(' with input:')[0].strip()
+                                input_part = parts.split(' with input:')[1].strip()
+                                tool_calls.append({
+                                    'tool_name': tool_name,
+                                    'input': input_part,
+                                    'output': 'Tool executed successfully'
+                                })
+                        except:
+                            continue
+        except Exception:
+            pass
+    
+    return tool_calls
+
+def display_tool_usage(tool_calls):
+    """Display tool usage in Streamlit"""
+    if not tool_calls:
+        return
+    
+    st.markdown("🛠️ **Tools Used:**")
+    
+    for i, tool_call in enumerate(tool_calls, 1):
+        with st.expander(f"🔧 {tool_call['tool_name']}", expanded=False):
+            st.markdown(f"**Input:** `{tool_call['input']}`")
+            st.markdown(f"**Output:** {tool_call['output']}")
+
+# Get available tools information
+def get_tools_info():
+    """Get information about available tools"""
+    try:
+        tools = create_langchain_tools_chromadb()
+        tool_info = []
+        
+        for tool in tools:
+            info = {
+                "name": tool.name,
+                "description": tool.description,
+                "status": "✅ Available"
+            }
+            tool_info.append(info)
+        
+        return tool_info
+    except Exception as e:
+        return [{"name": "Error loading tools", "description": str(e), "status": "❌ Error"}]
 
 # Check API key status
 def check_api_key_status():
@@ -318,10 +401,34 @@ def main():
         # Render conversations list
         render_conversations_sidebar()
         
+        # Tools section - only show recent usage, not all available tools
+        # Available Tools section removed per user request
+        
+        # Chat statistics
+        st.subheader("📈 Chat Stats")
+        current_conv = get_current_conversation()
+        current_messages = current_conv.get("messages", [])
+        st.metric("Messages", len(current_messages))
+        st.metric("Tool Calls", len(st.session_state.tool_usage_history))
+        
+        # Recent tool usage - only show if there are recent tools used
+        if st.session_state.tool_usage_history:
+            st.subheader("🔧 Recent Tools Used")
+            for usage in st.session_state.tool_usage_history[-3:]:  # Show last 3
+                st.write(f"• **{usage['tool_name']}** - {usage['timestamp']}")
+            
+            if len(st.session_state.tool_usage_history) > 3:
+                with st.expander(f"View More ({len(st.session_state.tool_usage_history)} total)"):
+                    for usage in st.session_state.tool_usage_history[:-3]:
+                        st.write(f"• **{usage['tool_name']}** - {usage['timestamp']}")
+        
+        st.markdown("---")
+        
         # Global controls at bottom
         if st.button("Clear All Conversations", help="Delete all conversations"):
             st.session_state.conversations = {}
             st.session_state.current_conversation_id = None
+            st.session_state.tool_usage_history = []
             st.rerun()
     
     # Main chat interface
@@ -361,6 +468,10 @@ def main():
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            
+            # Display tool calls if this is an assistant message with tool usage
+            if message["role"] == "assistant" and "tool_calls" in message and message["tool_calls"]:
+                display_tool_usage(message["tool_calls"])
     
     # Chat input
     if prompt := st.chat_input("What would you like to know?"):
@@ -407,11 +518,32 @@ def main():
                         
                         agent_reply = response.get("output", "I apologize, but I couldn't generate a response.")
                         
+                        # Parse tool calls from response
+                        tool_calls = parse_tool_calls_from_response(response)
+                        
+                        # Track tool usage for history
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        for tool_call in tool_calls:
+                            st.session_state.tool_usage_history.append({
+                                'tool_name': tool_call['tool_name'],
+                                'timestamp': timestamp,
+                                'query': prompt[:50] + "..." if len(prompt) > 50 else prompt
+                            })
+                        
                         # Display the response
                         message_placeholder.markdown(agent_reply)
                         
+                        # Display tool usage below response
+                        if tool_calls:
+                            display_tool_usage(tool_calls)
+                        
                         # Add assistant message to current conversation
-                        assistant_message = {"role": "assistant", "content": agent_reply}
+                        assistant_message = {
+                            "role": "assistant", 
+                            "content": agent_reply,
+                            "timestamp": datetime.now().isoformat(),
+                            "tool_calls": tool_calls
+                        }
                         st.session_state.conversations[conv_id]["messages"].append(assistant_message)
                         
                        
