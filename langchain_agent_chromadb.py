@@ -115,12 +115,20 @@ def create_langchain_tools_chromadb():
             func=lambda input: (
                 print(f"[TOOL CALLED] search_reviews with input: {input}") or
                 (
-                    search_tool(input, k=5) if isinstance(input, str)
-                    else search_tool(
-                        input.get("query", ""),
-                        k=input.get("k", 5),
-                        business_id=input.get("business_id", None)
-                    )
+                    # Try to parse JSON string if it's a string that starts with '{'
+                    (lambda i: print("DEBUG: Processing JSON string input") or search_tool(
+                        json.loads(i).get("query", ""),
+                        k=json.loads(i).get("k", 5),
+                        business_id=json.loads(i).get("business_id", None)
+                    ))(input) if isinstance(input, str) and input.strip().startswith('{') 
+                    # Regular string input
+                    else (lambda i: print("DEBUG: Processing regular string input") or search_tool(i, k=5))(input) if isinstance(input, str)
+                    # Dictionary input
+                    else (lambda i: print("DEBUG: Processing dictionary input") or search_tool(
+                        i.get("query", ""),
+                        k=i.get("k", 5),
+                        business_id=i.get("business_id", None)
+                    ))(input)
                 )
             )
         ),
