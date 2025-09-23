@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from tools.sentiment_summary_tool import SentimentSummaryTool
 
 def test_sentiment_summary_tool():

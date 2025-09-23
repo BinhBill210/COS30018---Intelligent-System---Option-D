@@ -1,9 +1,12 @@
+from dotenv import load_dotenv
+load_dotenv()
 from tools.business_search_tool import BusinessSearchTool
 import os
 
 def test_business_search_tool():
     print("Testing BusinessSearchTool...")
     host = os.environ.get("CHROMA_HOST", "localhost")
+    print(f"Using CHROMA_HOST: {host}")
     tool = BusinessSearchTool(host=host)
 
     # Test exact name lookup

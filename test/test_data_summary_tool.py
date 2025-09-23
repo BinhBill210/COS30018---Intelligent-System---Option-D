@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from tools.data_summary_tool import DataSummaryTool
 
 def test_data_summary_tool():

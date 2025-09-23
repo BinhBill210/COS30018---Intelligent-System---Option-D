@@ -14,6 +14,9 @@ import logging
 import time
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # 1. Create a LangChain-compatible LLM wrapper (same as before)
 class LangChainLocalLLM(LLM):
     """Custom LangChain LLM wrapper for LocalLLM"""
