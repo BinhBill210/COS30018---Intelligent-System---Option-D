@@ -353,8 +353,6 @@ def main():
     
     # Show current conversation title
     if current_conv.get("title", "") != "New Conversation":
-        st.subheader(f"💭 {current_conv['title']}")
-    else:
         st.markdown("Ask me anything about business, and I'll help you with insights and analysis.")
     
     
