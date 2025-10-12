@@ -1,7 +1,7 @@
 install environments
 
 ```bash
-conda create -f langchain-demo-env.yml -y
+conda env create -f langchain-demo-env.yml -y
 ```
 
 activate environment

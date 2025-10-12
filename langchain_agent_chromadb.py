@@ -108,7 +108,7 @@ def create_langchain_tools_chromadb():
     aspect_tool = AspectABSAToolHF()
     action_planner_tool = ActionPlannerTool()
     review_response_tool = ReviewResponseTool()
-    hybrid_tool = HybridRetrieve("data/processed/review_cleaned.parquet", "./chroma_db")
+    hybrid_tool = HybridRetrieve("data/processed/review_cleaned.parquet", "./chroma_db", host=chroma_host)
     pulse_tool = BusinessPulse("data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
@@ -234,7 +234,9 @@ def create_langchain_tools_chromadb():
         ),
         LangChainTool(
             name="hybrid_retrieve",
-            description="Advanced hybrid semantic+lexical retrieval with evidence. Input should be dict with 'business_id', 'query', optional 'top_k' (default 10), and optional 'filters' for date/stars filtering.",
+            description="Advanced hybrid semantic+lexical retrieval with evidence generation. "
+                        "Input must be JSON: {\"business_id\": \"ID\", \"query\": \"search terms\", "
+                        "\"top_k\": 10, \"filters\": {\"date_from\": \"YYYY-MM-DD\", \"stars\": [4,5]}}",
             func=lambda input: (
                 print(f"[TOOL CALLED] hybrid_retrieve with input: {input}") or
                 (
@@ -328,6 +330,8 @@ You must use the exact input format for each tool below. Do not invent or guess 
 - generate_review_response: Input must be a JSON string or dict with 'business_id', 'review_text', and optional 'response_tone'. Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
 - create_action_plan: Input must be a JSON string or dict with optional keys: 'business_id' (string), 'goals' (list of strings), 'constraints' (dict with 'budget' number and 'timeline_weeks' number), 'priority_issues' (list of strings from: 'quality', 'service', 'value', 'customer_experience'). Example: {{{{"business_id": "ABC123", "goals": ["improve_customer_satisfaction"], "constraints": {{"budget": 5000, "timeline_weeks": 8}}, "priority_issues": ["quality", "service"]}}}}
 - generate_review_response: Input must be a JSON string or dict with REQUIRED keys: 'business_id' (string), 'review_text' (string - cannot be empty), and optional 'response_tone' (string from: 'professional', 'friendly', 'formal'). Example: {{{{"business_id": "ABC123", "review_text": "Great food but slow service", "response_tone": "professional"}}}}
+- hybrid_retrieve: Input must be a JSON dict with REQUIRED keys: 'business_id' (string), 'query' (string) and optional 'top_k' (int, default 10), 'filters' (dict with 'date_from', 'date_to' in YYYY-MM-DD format, 'stars' as [min, max] array). Example: {{{{"business_id": "ABC123", "query": "food quality", "top_k": 10, "filters": {{"date_from": "2023-01-01", "stars": [4, 5]}}}}}}
+- business_pulse: Input can be a string (business_id) or a dict with 'business_id' (string) and optional 'time_range' (string: '3M', '6M', '1Y', 'all'). Example: "ABC123" or {{{{"business_id": "ABC123", "time_range": "3M"}}}}
 
 
 You must never use Action Input with extra quotes, double braces, or incorrect JSON. Only use the formats above.
@@ -350,8 +354,6 @@ If you need to use multiple tools, repeat the Thought/Action/Action Input block 
 
 When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
 
-
-Thought: [Your reasoning about why no further tools are needed]
 Final Answer: [your response here]
 
 
@@ -360,6 +362,8 @@ Available capabilities:
 - Analyze sentiment(Tool name: analyze_sentiment): Analyze sentiment patterns in review texts
 - Get data summary(Tool name: get_data_summary): Get statistical summaries of review data
 - Get business id(Tool name: get_business_id) Get the business_id for a given business name
+- Get business pulse(Tool name: business_pulse): Get business health analysis and performance insights
+- Hybrid retrieve(Tool name: hybrid_retrieve): Advanced hybrid semantic+lexical retrieval with evidence
 - Search businesses(Tool name: search_business): Semantic search for businesses by description or name
 - Get business info(Tool name: get_business_info): Get general info for a business_id, after get the output from the tool, rather than giving the raw format of the output, you should reformatting the output to make your answer have a better format for users to read it
 - Analyze aspects(Tool name: analyze_aspects): Analyze aspects of a list of reviews from a business_id, after you get the score, take one evidence for one aspect.

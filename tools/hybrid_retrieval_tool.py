@@ -34,14 +34,14 @@ class HybridRetrieve:
             # Test connection
             _ = self.collection.count()
             self.connection_mode = "server"
-            print(f"✅ Connected to ChromaDB server at {host}:{port}")
+            print(f"Connected to ChromaDB server at {host}:{port}")
         except Exception as e:
             try:
                 # Fallback to local client
                 self.client = chromadb.PersistentClient(path=chroma_path)
                 self.collection = self.client.get_collection("yelp_reviews")
                 self.connection_mode = "local"
-                print(f"✅ Connected to local ChromaDB at {chroma_path}")
+                print(f"Connected to local ChromaDB at {chroma_path}")
             except Exception as e2:
                 raise ConnectionError(f"Failed to connect to ChromaDB. Server error: {e}, Local error: {e2}")
 
