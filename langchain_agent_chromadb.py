@@ -108,7 +108,7 @@ def create_langchain_tools_chromadb():
     aspect_tool = AspectABSAToolHF()
     action_planner_tool = ActionPlannerTool()
     review_response_tool = ReviewResponseTool()
-    hybrid_tool = HybridRetrieve("data/processed/review_cleaned.parquet", "./chroma_db")
+    hybrid_tool = HybridRetrieve(host=chroma_host)
     pulse_tool = BusinessPulse("data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
