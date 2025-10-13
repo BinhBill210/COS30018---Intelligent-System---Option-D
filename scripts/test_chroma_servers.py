@@ -11,7 +11,7 @@ def test_business_connection():
     
     try:
         # Connect to the ChromaDB server
-        client = chromadb.HttpClient(host="localhost", port=8000)
+        client = chromadb.HttpClient(host="172.24.104.210", port=8000)
         collection = client.get_collection("yelp_businesses")
         
         # Get collection info
@@ -51,7 +51,7 @@ def test_reviews_connection():
     
     try:
         # Connect to the ChromaDB server
-        client = chromadb.HttpClient(host="localhost", port=8001)
+        client = chromadb.HttpClient(host="172.24.104.210", port=8001)
         collection = client.get_collection("yelp_reviews")
         
         # Get collection info

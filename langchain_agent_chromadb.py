@@ -108,7 +108,7 @@ def create_langchain_tools_chromadb():
     aspect_tool = AspectABSAToolHF()
     action_planner_tool = ActionPlannerTool()
     review_response_tool = ReviewResponseTool()
-    hybrid_tool = HybridRetrieve(host=chroma_host)
+    hybrid_tool = HybridRetrieve("data/processed/review_cleaned.parquet", "./chroma_db", host=chroma_host)
     pulse_tool = BusinessPulse("data/processed/review_cleaned.parquet")
     # Convert to LangChain tools
     langchain_tools = [
@@ -342,13 +342,14 @@ When tools return little or nothing, Be explicit: say "No relevant reviews were 
 
 Begin!
 To use a tool, use the following format for each tool you use:
+You must never use triple backticks (```) or any markdown code fences around Thought/Action/Action Input. 
 
 
 Thought: [Your reasoning about which tool(s) to use and why]
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action (strictly follow the required format above)
 
-
+Do NOT prefix with ```tool_code or any fence.
 If you need to use multiple tools, repeat the Thought/Action/Action Input block for each tool, and update your Thought after each Observation.
 
 When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
@@ -379,7 +380,7 @@ After the user choose, use get_business_id(name) to get the exact business_id be
 
 When giving the Final Answer:
 - Write in a clear, professional, and structured style (use bullet points, headings, and short paragraphs). Avoid raw JSON or unformatted tool output. For example, instead of search_review, answer it with Search reviews.
-- MUST NOT include any business_id in your answer. if the user asked for it, answer politely that you cannot give the business_id
+- MUST NOT include any business_id in your answer. if the user asked for it, answer politely that you cannot give the business_id. For example, this is a wrong one "Vietnamese Food Truck (business_id: eEOYSgkmpB90uNA7lDOMRA): A Vietnamese food truck." Do not include any business_id
 - When giving the Final Answer, write in a clear, professional, and structured style (use bullet points, headings, and short paragraphs). Avoid raw JSON or unformatted tool output. For example, instead of search_review, answer it with Search reviews
 - If the tools do not return anything or you do not have enough information to answer the question, answer it politely with professional voice
 

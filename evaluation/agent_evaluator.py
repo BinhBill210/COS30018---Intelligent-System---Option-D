@@ -96,28 +96,37 @@ class BusinessAgentEvaluator:
             return []
     
     def _extract_tool_calls_from_response(self, agent_output: str) -> List[str]:
-        """Extract tool calls from agent response by parsing the output"""
+        """Enhanced tool extraction with comprehensive patterns and debugging"""
         
-        # Improved patterns for LangChain AgentExecutor responses
-        patterns = [
-            # Pattern 1: AgentAction(tool='tool_name' format
-            r"AgentAction\(tool='([^']+)'",
-            # Pattern 2: Action: tool_name in ReAct logs
-            r'Action:\s*([a-zA-Z_][a-zA-Z0-9_]*)',
-            # Pattern 3: tool='tool_name' format
-            r"tool='([^']+)'",
-            # Pattern 4: Legacy patterns (kept for compatibility)
-            r'\[TOOL CALLED\]\s+(\w+)',
+        # Store patterns as instance variable for debugging
+        self.patterns = [
+            # Primary LangChain ReAct patterns
+            r"Action:\s*([a-zA-Z_][a-zA-Z0-9_]*)",  # Action: tool_name
+            
+            # Custom tool call patterns from your system
+            r'\[TOOL CALLED\]\s+(\w+)',  # [TOOL CALLED] tool_name
+            r'\[TOOL CALLED\]\s+(\w+)\s+with input:',  # [TOOL CALLED] tool_name with input:
+            
+            # LangChain AgentExecutor patterns
+            r"AgentAction\(tool='([^']+)'",  # AgentAction(tool='tool_name'
+            r"tool='([^']+)'",  # tool='tool_name'
+            
+            # Legacy patterns (kept for compatibility)
             r'Tool:\s+(\w+)',
-            r'Using tool:\s+(\w+)'
+            r'Using tool:\s+(\w+)',
+            r'Calling tool:\s+(\w+)',
+            
+            # Additional patterns for different response formats
+            r'"tool":\s*"([^"]+)"',  # JSON format: "tool": "tool_name"
+            r"'tool':\s*'([^']+)'",  # Python dict format
         ]
         
         all_tools = []
-        for pattern in patterns:
-            matches = re.findall(pattern, agent_output, re.IGNORECASE)
+        for pattern in self.patterns:
+            matches = re.findall(pattern, agent_output, re.IGNORECASE | re.MULTILINE)
             all_tools.extend(matches)
         
-        # Deduplicate while preserving order
+        # Clean and deduplicate tools
         seen = set()
         unique_tools = []
         for tool in all_tools:
@@ -126,22 +135,58 @@ class BusinessAgentEvaluator:
                 seen.add(tool_clean)
                 unique_tools.append(tool_clean)
         
+        # Debug logging
+        self._debug_tool_extraction(agent_output, unique_tools)
+        
         return unique_tools
     
+    def _debug_tool_extraction(self, agent_output: str, extracted_tools: List[str]):
+        """Debug tool extraction for troubleshooting"""
+        
+        logger.info(f"=== Tool Extraction Debug ===")
+        logger.info(f"Response length: {len(agent_output)}")
+        logger.info(f"Extracted tools: {extracted_tools}")
+        
+        # Show patterns that matched
+        if hasattr(self, 'patterns'):
+            for pattern in self.patterns:
+                matches = re.findall(pattern, agent_output, re.IGNORECASE | re.MULTILINE)
+                if matches:
+                    logger.info(f"Pattern '{pattern}' matched: {matches}")
+        
+        # Show sample of response if no tools found
+        if not extracted_tools:
+            logger.warning("No tools extracted. Response sample:")
+            logger.warning(agent_output[:1000])
+    
     def evaluate_tool_usage(self, expected_tools: List[str], actual_tools: List[str]) -> float:
-        """Simple tool usage accuracy check as specified in Phase 2"""
+        """Enhanced tool usage accuracy with partial credit"""
+        
         expected_normalized = [self._normalize_tool_name(tool) for tool in expected_tools]
         actual_normalized = [self._normalize_tool_name(tool) for tool in actual_tools]
         
         expected_set = set(expected_normalized)
         actual_set = set(actual_normalized)
         
+        # Perfect match
         if expected_set == actual_set:
-            return 1.0  # Perfect match
-        elif any(tool in actual_set for tool in expected_set):
-            return 0.5  # Partial match  
-        else:
-            return 0.0  # No match
+            return 1.0
+        
+        # Calculate intersection for partial credit
+        intersection = expected_set & actual_set
+        union = expected_set | actual_set
+        
+        if len(intersection) > 0:
+            # Jaccard similarity for partial credit
+            jaccard_score = len(intersection) / len(union)
+            
+            # Bonus for having all expected tools (even with extras)
+            if expected_set.issubset(actual_set):
+                jaccard_score = max(jaccard_score, 0.8)
+            
+            return jaccard_score
+        
+        return 0.0  # No match
     
     def _calculate_tool_selection_accuracy(self, expected: List[str], actual: List[str]) -> float:
         """Calculate tool selection accuracy score (enhanced version)"""
@@ -152,40 +197,77 @@ class BusinessAgentEvaluator:
         return self.evaluate_tool_usage(expected, actual)
     
     def _normalize_tool_name(self, tool_name: str) -> str:
-        """Normalize tool names for comparison"""
-        # Map different tool name formats to standard names matching LangChain agent
+        """Enhanced tool name normalization with comprehensive mapping"""
+        
+        # Comprehensive mapping based on actual tool names from your system
         mapping = {
-            # Primary LangChain tool names (exact matches)
-            'search_reviews': 'search_reviews',
-            'analyze_sentiment': 'analyze_sentiment', 
-            'get_data_summary': 'get_data_summary',
-            'get_business_id': 'get_business_id',
+            # Search and retrieval tools
+            'search_reviews': 'hybrid_retrieve',
+            'hybrid_retrieve': 'hybrid_retrieve',
+            'hybrid_search': 'hybrid_retrieve',
+            'search': 'hybrid_retrieve',
+            'retrieve': 'hybrid_retrieve',
+            
+            # Business search tools
+            'fuzzy_search': 'business_fuzzy_search',
             'business_fuzzy_search': 'business_fuzzy_search',
             'search_businesses': 'search_businesses',
-            'get_business_info': 'get_business_info',
-            'analyze_aspects': 'analyze_aspects',
-            'create_action_plan': 'create_action_plan',
-            'generate_review_response': 'generate_review_response',
-            'hybrid_retrieve': 'hybrid_retrieve',
-            'business_pulse': 'business_pulse',
-            
-            # Alternative names and variations that might appear in test cases
-            'fuzzy_search': 'business_fuzzy_search',
-            'search_review': 'search_reviews',  # singular form
-            'review_search': 'search_reviews',
             'business_search': 'search_businesses',
-            'sentiment_analysis': 'analyze_sentiment',
-            'data_summary': 'get_data_summary',
+            'get_business_id': 'get_business_id',
+            'get_business_info': 'get_business_info',
             'business_info': 'get_business_info',
+            
+            # Analysis tools
+            'analyze_sentiment': 'analyze_sentiment',
+            'sentiment_analysis': 'analyze_sentiment',
+            'sentiment': 'analyze_sentiment',
+            'analyze_aspects': 'analyze_aspects',
             'aspect_analysis': 'analyze_aspects',
+            'aspects': 'analyze_aspects',
+            
+            # Business intelligence tools
+            'get_data_summary': 'get_data_summary',
+            'data_summary': 'get_data_summary',
+            'business_pulse': 'business_pulse',
+            'pulse': 'business_pulse',
+            
+            # Action and planning tools
+            'create_action_plan': 'create_action_plan',
             'action_planner': 'create_action_plan',
+            'action_plan': 'create_action_plan',
+            'action': 'create_action_plan',
+            'plan': 'create_action_plan',
+            'generate_review_response': 'generate_review_response',
             'review_response': 'generate_review_response',
-            'hybrid_search': 'hybrid_retrieve',
-            'pulse': 'business_pulse'
+            'response': 'generate_review_response',
+            
+            # Handle variations and common aliases
+            'review_search': 'hybrid_retrieve',
+            'search_review': 'hybrid_retrieve',
         }
         
         normalized = tool_name.lower().strip()
         return mapping.get(normalized, normalized)
+    
+    def test_tool_extraction(self) -> None:
+        """Test tool extraction with sample responses"""
+        logger.info("=== Testing Tool Extraction ===")
+        
+        # Sample responses from your system
+        sample_responses = [
+            "Action: hybrid_retrieve\nAction Input: {\"business_id\": \"ABC123\", \"query\": \"dirty tables\"}",
+            "[TOOL CALLED] business_fuzzy_search with input: Vietnamese Food Truck",
+            "Thought: I need to search for the business first\nAction: get_business_id\nAction Input: Vietnamese Food Truck",
+            "Action: get_business_id\nAction Input: St Honore Pastries\nObservation: Found business ID: MTSW4McQd7CbVtyjqoe9mw\nAction: hybrid_retrieve\nAction Input: {\"business_id\": \"MTSW4McQd7CbVtyjqoe9mw\", \"query\": \"food quality\"}",
+            "Thought: Let me analyze the business health\nAction: business_pulse\nAction Input: {\"business_id\": \"ABC123\"}",
+        ]
+        
+        for i, response in enumerate(sample_responses):
+            tools = self._extract_tool_calls_from_response(response)
+            logger.info(f"Test {i+1}: {response[:50]}...")
+            logger.info(f"  Extracted tools: {tools}")
+            print(f"Test {i+1}: Extracted tools: {tools}")
+            print("---")
     
     def _calculate_response_completeness(self, expected_elements: List[str], response: str) -> float:
         """Calculate how many expected elements are present in the response"""
@@ -487,14 +569,14 @@ class BusinessAgentEvaluator:
 
 # Usage example
 if __name__ == "__main__":
-    print("🧪 Business Intelligence Agent Evaluation Framework")
+    print(" Business Intelligence Agent Evaluation Framework")
     print("=" * 60)
     
     # Initialize evaluator
     evaluator = BusinessAgentEvaluator()
     
-    print(f"📊 Loaded {len(evaluator.test_cases)} test cases from golden dataset")
-    print("\n🎯 Test Categories:")
+    print(f" Loaded {len(evaluator.test_cases)} test cases from golden dataset")
+    print("\n Test Categories:")
     
     categories = {}
     for test_case in evaluator.test_cases:
@@ -504,8 +586,8 @@ if __name__ == "__main__":
     for cat, count in categories.items():
         print(f"  - {cat}: {count} tests")
     
-    print(f"\n✅ Evaluation framework ready!")
-    print(f"🚀 To run evaluation:")
+    print(f"\n Evaluation framework ready!")
+    print(f" To run evaluation:")
     print(f"   from langchain_agent_chromadb import create_business_agent_chromadb")
     print(f"   agent = create_business_agent_chromadb()")
     print(f"   evaluator.set_agent(agent)")
