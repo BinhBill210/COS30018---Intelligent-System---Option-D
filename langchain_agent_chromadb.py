@@ -404,7 +404,9 @@ New input: {input}
         tools=tools,
         verbose=verbose,
         max_iterations=max_iterations,
-        handle_parsing_errors=True
+        max_execution_time=300,  # 5 minutes max execution time
+        handle_parsing_errors=True,
+        return_intermediate_steps=True  # Return intermediate steps for evaluation
     )
     
     return agent_executor
