@@ -200,9 +200,9 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
                     else:
                         print(f"       Step {i+1}: No 'tool' attribute found, type: {type(action)}")
         else:
-            print(f"    ⚠ No 'intermediate_steps' found in response. Keys: {list(result.keys())}")
+            print(f"No 'intermediate_steps' found in response. Keys: {list(result.keys())}")
         
-        print(f"    🔧 Total tools called: {tool_calls}")
+        print(f"Total tools called: {tool_calls}")
         
         # Increment call count and add delay to respect API rate limits
         _call_count += 1
@@ -216,8 +216,8 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"    ❌ Error running agent on query: {query[:50]}...")
-        print(f"       Error: {e}")
+        print(f" Error running agent on query: {query[:50]}...")
+        print(f" Error: {e}")
         
         # Still increment counter and wait even on error
         _call_count += 1

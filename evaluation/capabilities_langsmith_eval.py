@@ -31,6 +31,23 @@ from collections import Counter
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+from safety_evaluators import (
+    privacy_pii_evaluator,
+    toxicity_evaluator,
+    compliance_refusal_evaluator,
+    data_access_compliance_evaluator
+)
+from retrieval_evaluators import (
+    retrieval_precision_evaluator,
+    retrieval_recall_evaluator,
+    retrieval_mrr_evaluator,
+    retrieval_ndcg_evaluator
+)
+from robustness_evaluators import (
+    robustness_typo_evaluator,
+    error_recovery_evaluator
+)
+from llm_judge import get_llm_judge
 from langsmith import Client
 from langsmith.schemas import Run, Example
 from langsmith.run_helpers import traceable
@@ -173,7 +190,7 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         tool_params = []
         
         if "intermediate_steps" in result:
-            print(f"    📋 Found {len(result['intermediate_steps'])} intermediate steps")
+            print(f"  Found {len(result['intermediate_steps'])} intermediate steps")
             for i, step in enumerate(result["intermediate_steps"]):
                 if isinstance(step, tuple) and len(step) > 0:
                     action = step[0]
@@ -191,10 +208,10 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
                             })
                             print(f"       Step {i+1}: {tool_name} ✓")
         
-        print(f"    🔧 Total tools called: {tool_calls}")
+        print(f"Total tools called: {tool_calls}")
         
         _call_count += 1
-        print(f"    ⏳ Completed test case #{_call_count}. Waiting 60 seconds...")
+        print(f"  Completed test case #{_call_count}. Waiting 60 seconds...")
         time.sleep(60)
         
         return {
@@ -281,7 +298,71 @@ def tool_selection_accuracy_evaluator(run: Run, example: Example) -> dict:
         "score": f1,
         "comment": f"F1: {f1:.2f}, Missing: {missing}, Extra: {extra}"
     }
+    
+def answer_completeness_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator: Answer Completeness
+    Checks if the agent's answer contains all expected key points from the ground truth.
+    (Logic adapted from agent_evaluator.py)
+    """
+    # Lấy "dàn ý" từ ground truth
+    expected_summary = example.outputs.get("expected_answer_summary", [])
 
+    # Lấy câu trả lời thực tế của agent
+    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
+
+    if not expected_summary:
+        return {"key": "answer_completeness", "score": 1.0, "comment": "No summary points to check."}
+
+    found_points = 0
+    missing_points = []
+    for point in expected_summary:
+        # Kiểm tra xem từng ý chính có trong câu trả lời không
+        if point.lower() in actual_answer.lower():
+            found_points += 1
+        else:
+            missing_points.append(point)
+
+    # Tính điểm dựa trên tỷ lệ các ý tìm thấy
+    score = found_points / len(expected_summary) if expected_summary else 1.0
+    comment = f"Found {found_points}/{len(expected_summary)} expected points. Missing: {missing_points}"
+
+    return {
+        "key": "answer_completeness",
+        "score": score,
+        "comment": comment
+    }
+
+def response_relevance_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator: Response Relevance
+    Checks keyword overlap between the query and the final answer.
+    (Logic adapted from agent_evaluator.py)
+    """
+    query = example.inputs.get("query", "")
+    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
+
+    query_words = set(query.lower().split())
+    response_words = set(actual_answer.lower().split())
+
+    # Loại bỏ các từ phổ biến để tăng độ chính xác
+    common_words = {'the', 'a', 'and', 'or', 'is', 'are', 'in', 'on', 'what', 'give', 'me'}
+    query_words -= common_words
+    response_words -= common_words
+
+    if not query_words:
+        return {"key": "response_relevance", "score": 1.0, "comment": "Query has no specific keywords."}
+
+    overlap = len(query_words.intersection(response_words))
+    score = min(overlap / len(query_words), 1.0)
+
+    comment = f"Found {overlap}/{len(query_words)} keyword overlaps."
+
+    return {
+        "key": "response_relevance",
+        "score": score,
+        "comment": comment
+    }
 
 def parameter_accuracy_evaluator(run: Run, example: Example) -> dict:
     """
@@ -447,7 +528,185 @@ def answer_quality_evaluator(run: Run, example: Example) -> dict:
         "comment": f"Length: {len(actual_answer)} chars, Valid: {has_valid_answer}"
     }
 
+    # ---------------------- LLM-as-a-Judge Evaluators ----------------------
 
+def llm_judge_relevance_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator 8: LLM-as-a-Judge for Answer Relevance
+    
+    Uses LLM to evaluate how relevant the answer is to the query.
+    """
+    judge = get_llm_judge()
+    
+    query = example.inputs.get("query", "")
+    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
+    expected_trace = example.outputs.get("expected_trace", [])
+    
+    # Get expected answer description from trace or use a default
+    expected_summary = "Complete the task correctly"
+    if expected_trace:
+        expected_summary = f"Use tools: {[step['tool'] for step in expected_trace]}"
+    
+    try:
+        result = judge.evaluate_relevance(query, actual_answer, expected_summary)
+        return {
+            "key": "llm_judge_relevance",
+            "score": result["score"],
+            "comment": result["justification"]
+        }
+    except Exception as e:
+        return {
+            "key": "llm_judge_relevance",
+            "score": 0.0,
+            "comment": f"Evaluation failed: {str(e)}"
+        }
+
+
+def llm_judge_helpfulness_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator 9: LLM-as-a-Judge for Helpfulness
+    
+    Evaluates how helpful the answer is to the user.
+    """
+    judge = get_llm_judge()
+    
+    query = example.inputs.get("query", "")
+    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
+    
+    try:
+        result = judge.evaluate_helpfulness(query, actual_answer)
+        return {
+            "key": "llm_judge_helpfulness",
+            "score": result["score"],
+            "comment": result["justification"]
+        }
+    except Exception as e:
+        return {
+            "key": "llm_judge_helpfulness",
+            "score": 0.0,
+            "comment": f"Evaluation failed: {str(e)}"
+        }
+
+
+def llm_judge_explanation_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator 10: LLM-as-a-Judge for Explanation Quality
+    
+    Evaluates the quality of reasoning and explanation.
+    """
+    judge = get_llm_judge()
+    
+    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
+    
+    try:
+        result = judge.evaluate_explanation_quality(actual_answer)
+        return {
+            "key": "llm_judge_explanation",
+            "score": result["score"],
+            "comment": result["justification"]
+        }
+    except Exception as e:
+        return {
+            "key": "llm_judge_explanation",
+            "score": 0.0,
+            "comment": f"Evaluation failed: {str(e)}"
+        }
+
+# ---------------------- Performance Evaluators ----------------------
+
+def latency_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator: Latency Measurement
+    
+    Measures total execution time.
+    """
+    # LangSmith tracks execution time automatically
+    latency_ms = run.latency if hasattr(run, 'latency') else 0
+    
+    # Convert to seconds
+    latency_sec = latency_ms / 1000.0 if latency_ms else 0.0
+    
+    # Score: 1.0 if < 30s, linear decay to 0 at 120s
+    if latency_sec <= 30:
+        score = 1.0
+    elif latency_sec >= 120:
+        score = 0.0
+    else:
+        score = 1.0 - (latency_sec - 30) / 90
+    
+    return {
+        "key": "latency",
+        "score": score,
+        "comment": f"Latency: {latency_sec:.2f}s"
+    }
+
+
+def token_usage_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator: Token Usage Efficiency
+    
+    Measures token efficiency (lower is better).
+    """
+    # Try to extract token usage from run metadata
+    # This depends on LangSmith's tracking
+    total_tokens = 0
+    
+    if hasattr(run, 'metadata') and run.metadata:
+        total_tokens = run.metadata.get('total_tokens', 0)
+    
+    # Rough cost estimation (Gemini pricing as example)
+    # Input: $0.075 / 1M tokens, Output: $0.30 / 1M tokens
+    # Assuming 50/50 split for simplicity
+    estimated_cost = (total_tokens / 1_000_000) * 0.1875
+    
+    # Score: 1.0 if < 1000 tokens, linear decay to 0 at 10000 tokens
+    if total_tokens <= 1000:
+        score = 1.0
+    elif total_tokens >= 10000:
+        score = 0.0
+    else:
+        score = 1.0 - (total_tokens - 1000) / 9000
+    
+    return {
+        "key": "token_efficiency",
+        "score": score,
+        "comment": f"Tokens: {total_tokens}, Est. cost: ${estimated_cost:.4f}"
+    }
+
+
+def cost_efficiency_evaluator(run: Run, example: Example) -> dict:
+    """
+    Evaluator: Cost Efficiency
+    
+    Measures cost per successful task.
+    """
+    success = run.outputs.get("success", False) if run.outputs else False
+    total_tokens = 0
+    
+    if hasattr(run, 'metadata') and run.metadata:
+        total_tokens = run.metadata.get('total_tokens', 0)
+    
+    estimated_cost = (total_tokens / 1_000_000) * 0.1875
+    
+    # Score based on cost-effectiveness
+    if not success:
+        score = 0.0
+        comment = "Task failed, cost wasted"
+    elif estimated_cost <= 0.01:  # Less than 1 cent
+        score = 1.0
+        comment = f"Excellent: ${estimated_cost:.4f}"
+    elif estimated_cost <= 0.05:  # Less than 5 cents
+        score = 0.7
+        comment = f"Good: ${estimated_cost:.4f}"
+    else:
+        score = 0.3
+        comment = f"Expensive: ${estimated_cost:.4f}"
+    
+    return {
+        "key": "cost_efficiency",
+        "score": score,
+        "comment": comment
+    }
 # ============================================================================
 # RUN EVALUATION
 # ============================================================================
@@ -455,20 +714,51 @@ def answer_quality_evaluator(run: Run, example: Example) -> dict:
 def run_evaluation_with_agent(dataset_name: str, agent):
     """Run the comprehensive evaluation."""
     print(f"\n[4] Running enhanced evaluation on dataset: {dataset_name}")
-    print("    ⏳ This may take several minutes...")
+    print("This may take several minutes...")
     
     def agent_wrapper(inputs: dict) -> dict:
         return run_g1_agent_with_tracing(agent, inputs["query"])
     
-    # All evaluators
+    # All evaluators - UPDATED LIST
     evaluators = [
+        # Tool Use
         invocation_accuracy_evaluator,
         tool_selection_accuracy_evaluator,
         parameter_accuracy_evaluator,
+        
+        # Planning & Reasoning
         progress_rate_evaluator,
         step_success_rate_evaluator,
+        
+        # Reliability
         exact_sequence_match_evaluator,
-        answer_quality_evaluator
+        answer_quality_evaluator,
+        
+        # LLM-as-a-Judge (NEW!)
+        llm_judge_relevance_evaluator,
+        llm_judge_helpfulness_evaluator,
+        llm_judge_explanation_evaluator,
+
+        # Retrieval Quality (NEW!)
+        retrieval_precision_evaluator,
+        retrieval_recall_evaluator,
+        retrieval_mrr_evaluator,
+        retrieval_ndcg_evaluator,
+
+            # Safety & Compliance (NEW!)
+        privacy_pii_evaluator,
+        toxicity_evaluator,
+        compliance_refusal_evaluator,
+        data_access_compliance_evaluator,
+
+        # Robustness (NEW!)
+        robustness_typo_evaluator,
+        error_recovery_evaluator,
+    
+        # Performance (NEW!)
+        latency_evaluator,
+        token_usage_evaluator,
+        cost_efficiency_evaluator,
     ]
     
     results = client.evaluate(
@@ -488,7 +778,7 @@ def run_evaluation_with_agent(dataset_name: str, agent):
 # ============================================================================
 
 def display_results(results):
-    """Display comprehensive evaluation results."""
+    """Display comprehensive evaluation results with category breakdown."""
     print("\n" + "=" * 60)
     print("ENHANCED EVALUATION RESULTS")
     print("=" * 60)
@@ -497,29 +787,53 @@ def display_results(results):
     print(f"   Project: G1 Agent Enhanced Evaluation")
     print(f"   Dataset: {DATASET_NAME}")
     
-    print("\n📈 Metrics by Category:")
-    print("\n   🔧 Tool Use Capabilities:")
-    print("      - Invocation Accuracy: Correct tool invocation decisions")
-    print("      - Tool Selection (F1): Precision & recall of tool selection")
-    print("      - Parameter Accuracy: Correct parameter assignment")
+    # Display results by category
+    print("\n📈 Results by Category:")
     
-    print("\n   🧠 Planning & Reasoning:")
-    print("      - Progress Rate: Alignment with expected trajectory")
-    print("      - Step Success Rate: Successful execution of steps")
+    for category_name, subcategories in EVALUATION_TAXONOMY.items():
+        print(f"\n{'='*60}")
+        print(f"📁 {category_name.upper().replace('_', ' ')}")
+        print(f"{'='*60}")
+        
+        for subcategory_name, evaluators in subcategories.items():
+            print(f"\n  📊 {subcategory_name.replace('_', ' ').title()}:")
+            
+            for evaluator in evaluators:
+                evaluator_key = evaluator.__name__.replace('_evaluator', '')
+                print(f"     - {evaluator_key}")
     
-    print("\n   🎯 Reliability:")
-    print("      - Exact Sequence Match: Consistency metric")
-    print("      - Answer Quality: Valid, meaningful responses")
+    # Aggregate scores
+    print("\n" + "="*60)
+    print("📊 Aggregate Scores:")
+    print("="*60)
     
-    print("\n📊 Aggregate Scores:")
-    if hasattr(results, 'aggregate_results'):
-        for metric_name, metric_value in results.aggregate_results.items():
-            print(f"   {metric_name}: {metric_value:.3f}")
+    if hasattr(results, 'results'):
+        # Calculate category averages
+        category_scores = {}
+        
+        for category_name, subcategories in EVALUATION_TAXONOMY.items():
+            scores = []
+            for subcategory_name, evaluators in subcategories.items():
+                for evaluator in evaluators:
+                    key = evaluator.__name__.replace('_evaluator', '')
+                    # Try to find score in results
+                    # This is simplified - actual implementation depends on results structure
+                    if hasattr(results, 'aggregate_results'):
+                        score = results.aggregate_results.get(key, None)
+                        if score is not None:
+                            scores.append(score)
+            
+            if scores:
+                category_scores[category_name] = sum(scores) / len(scores)
+        
+        # Display category scores
+        for category, avg_score in category_scores.items():
+            print(f"   {category.replace('_', ' ').title()}: {avg_score:.3f}")
     
     print("\n🔗 View detailed results:")
     print("   1. Go to https://smith.langchain.com/")
     print("   2. Navigate to: G1 Agent Enhanced Evaluation")
-    print("   3. Analyze individual traces and metrics")
+    print("   3. Analyze individual traces and metrics by category")
     
     print("\n✅ Evaluation complete!")
     print("=" * 60)
@@ -566,7 +880,40 @@ def main():
         test_cases = load_test_dataset(dataset_file)
         dataset_name = create_langsmith_dataset(test_cases)
         agent = load_g1_agent()
-        results = run_evaluation_with_agent(dataset_name, agent)
+        
+        # Ask user which evaluation to run
+        print("\n" + "="*60)
+        print("EVALUATION OPTIONS")
+        print("="*60)
+        print("1. Run FULL evaluation (all metrics)")
+        print("2. Run by category:")
+        print("   - agent_capabilities")
+        print("   - agent_behavior")
+        print("   - reliability")
+        print("   - safety")
+        print("3. Run original evaluation (backward compatible)")
+        
+        choice = input("\nEnter choice (1-3, or category name): ").strip()
+        
+        if choice == "1":
+            results = run_full_evaluation_organized(dataset_name, agent)
+        elif choice == "2" or choice in EVALUATION_TAXONOMY:
+            if choice == "2":
+                category = input("Enter category name: ").strip()
+            else:
+                category = choice
+            
+            if category in EVALUATION_TAXONOMY:
+                results = run_evaluation_by_category(dataset_name, agent, category)
+            else:
+                print(f"Invalid category. Choose from: {list(EVALUATION_TAXONOMY.keys())}")
+                return
+        elif choice == "3":
+            results = run_evaluation_with_agent(dataset_name, agent)
+        else:
+            print("Invalid choice. Running full evaluation by default.")
+            results = run_full_evaluation_organized(dataset_name, agent)
+        
         display_results(results)
         
         print("\n💡 Next Steps:")
@@ -581,6 +928,141 @@ def main():
         import traceback
         traceback.print_exc()
 
+# ============================================================================
+# TAXONOMY-BASED EVALUATION
+# ============================================================================
+
+EVALUATION_TAXONOMY = {
+    "agent_capabilities": {
+        "tool_use": [
+            invocation_accuracy_evaluator,
+            tool_selection_accuracy_evaluator,
+            parameter_accuracy_evaluator,
+        ],
+        "planning_reasoning": [
+            progress_rate_evaluator,
+            step_success_rate_evaluator,
+        ],
+        "retrieval": [
+            retrieval_precision_evaluator,
+            retrieval_recall_evaluator,
+            retrieval_mrr_evaluator,
+            retrieval_ndcg_evaluator,
+        ]
+    },
+    "agent_behavior": {
+        "task_completion": [
+            exact_sequence_match_evaluator,
+            answer_quality_evaluator,
+        ],
+        "output_quality": [
+            llm_judge_relevance_evaluator,
+            llm_judge_helpfulness_evaluator,
+            llm_judge_explanation_evaluator,
+        ],
+        "performance": [
+            latency_evaluator,
+            token_usage_evaluator,
+            cost_efficiency_evaluator,
+        ]
+    },
+    "reliability": {
+        "consistency": [
+            exact_sequence_match_evaluator,
+        ],
+        "robustness": [
+            robustness_typo_evaluator,
+            error_recovery_evaluator,
+        ]
+    },
+    "safety": {
+        "privacy": [
+            privacy_pii_evaluator,
+        ],
+        "harm": [
+            toxicity_evaluator,
+        ],
+        "compliance": [
+            compliance_refusal_evaluator,
+            data_access_compliance_evaluator,
+        ]
+    }
+}
+
+
+def run_evaluation_by_category(dataset_name: str, agent, category: str):
+    """
+    Run evaluation for a specific category only.
+    
+    Args:
+        dataset_name: LangSmith dataset name
+        agent: Initialized agent
+        category: One of ["agent_capabilities", "agent_behavior", "reliability", "safety"]
+    """
+    print(f"\n[4] Running {category} evaluation on dataset: {dataset_name}")
+    print("    ⏳ This may take several minutes...")
+    
+    def agent_wrapper(inputs: dict) -> dict:
+        return run_g1_agent_with_tracing(agent, inputs["query"])
+    
+    # Get evaluators for this category
+    evaluators = []
+    for subcategory in EVALUATION_TAXONOMY[category].values():
+        evaluators.extend(subcategory)
+    
+    print(f"    Using {len(evaluators)} evaluators for category: {category}")
+    
+    results = client.evaluate(
+        agent_wrapper,
+        data=dataset_name,
+        evaluators=evaluators,
+        experiment_prefix=f"G1-{category.title()}-Eval",
+        max_concurrency=1
+    )
+    
+    print(f"    ✓ Evaluation complete!")
+    return results
+
+
+def run_full_evaluation_organized(dataset_name: str, agent):
+    """
+    Run complete evaluation organized by taxonomy.
+    
+    This runs ALL evaluators but organizes results by category.
+    """
+    print(f"\n[4] Running FULL evaluation (organized by taxonomy)")
+    print(f"    Dataset: {dataset_name}")
+    print("    ⏳ This will take significant time...")
+    
+    def agent_wrapper(inputs: dict) -> dict:
+        return run_g1_agent_with_tracing(agent, inputs["query"])
+    
+    # Collect ALL evaluators from taxonomy
+    all_evaluators = []
+    for category_name, subcategories in EVALUATION_TAXONOMY.items():
+        for subcategory_name, evaluators in subcategories.items():
+            all_evaluators.extend(evaluators)
+    
+    # Remove duplicates (some evaluators appear in multiple categories)
+    seen = set()
+    unique_evaluators = []
+    for evaluator in all_evaluators:
+        if evaluator.__name__ not in seen:
+            seen.add(evaluator.__name__)
+            unique_evaluators.append(evaluator)
+    
+    print(f"    Total unique evaluators: {len(unique_evaluators)}")
+    
+    results = client.evaluate(
+        agent_wrapper,
+        data=dataset_name,
+        evaluators=unique_evaluators,
+        experiment_prefix="G1-Full-Eval",
+        max_concurrency=1
+    )
+    
+    print(f"    ✓ Full evaluation complete!")
+    return results
 
 if __name__ == "__main__":
     main()
