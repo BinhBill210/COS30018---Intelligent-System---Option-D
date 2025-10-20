@@ -31,6 +31,7 @@ from langsmith import Client
 from langsmith.schemas import Run, Example
 from langsmith.run_helpers import traceable
 from dotenv import load_dotenv
+from llm_judge import get_llm_judge
 
 # Load environment variables from .env file
 load_dotenv()
@@ -46,7 +47,7 @@ os.environ["LANGCHAIN_PROJECT"] = "G1 Agent Evaluation"
 # Initialize LangSmith client
 client = Client()
 
-DATASET_NAME = "G1 Agent Test Dataset"
+DATASET_NAME = "G1 Agent Mini Dataset"
 
 print("=" * 60)
 print("LangSmith Evaluation - WITH ACTUAL G1 AGENT")
@@ -93,13 +94,17 @@ def create_langsmith_dataset(test_cases: List[Dict[str, Any]]) -> str:
     
     # Add examples to the dataset
     for test_case in test_cases:
-        inputs = {"query": test_case["query"]}
+        inputs = {"query": test_case.get("query", "")}
         outputs = {
             "expected_tool_chain": test_case.get("expected_tool_chain", []),
-            "expected_answer_summary": test_case.get("expected_answer_summary", []),
+            "expected_answer_summary": test_case.get("expected_answer_summary"),
+            "citations_gt": test_case.get("citations_gt", []),
+            "answer_gt": test_case.get("answer_gt"),
+            "numeric_tolerances": test_case.get("numeric_tolerances"),
             "test_id": test_case.get("test_id", ""),
-            "category": test_case.get("category", "")
+            "category": test_case.get("category", ""),
         }
+        outputs = {k: v for k, v in outputs.items() if v is not None}
         client.create_example(inputs=inputs, outputs=outputs, dataset_id=dataset.id)
     
     print(f"    ✓ Added {len(test_cases)} examples to dataset")
@@ -182,9 +187,9 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         answer = result.get("output", "")
         
         # Extract tool calls from intermediate steps
-        tool_calls = []
+        tool_calls: List[Dict[str, Any]] = []
         if "intermediate_steps" in result:
-            print(f"    📋 Found {len(result['intermediate_steps'])} intermediate steps")
+            print(f"     Found {len(result['intermediate_steps'])} intermediate steps")
             for i, step in enumerate(result["intermediate_steps"]):
                 if isinstance(step, tuple) and len(step) > 0:
                     action = step[0]
@@ -193,7 +198,12 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
                         tool_name = action.tool
                         # Filter out _Exception (error handling) and only include real tools
                         if tool_name != '_Exception':
-                            tool_calls.append(tool_name)
+                            tool_entry = {
+                                "name": tool_name,
+                                "args": getattr(action, "tool_input", {}),
+                                "ok": True,
+                            }
+                            tool_calls.append(tool_entry)
                             print(f"       Step {i+1}: {tool_name} ✓")
                         else:
                             print(f"       Step {i+1}: {tool_name} (skipped - error handling)")
@@ -206,13 +216,14 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         
         # Increment call count and add delay to respect API rate limits
         _call_count += 1
-        print(f"    ⏳ Completed test case #{_call_count}. Waiting 60 seconds to respect API rate limits...")
+        print(f"    Completed test case #{_call_count}. Waiting 60 seconds to respect API rate limits...")
         time.sleep(60)  # Wait 60 seconds between test cases to respect RPM limits
         
         return {
             "answer": answer,
             "tool_calls": tool_calls,
-            "query": query
+            "citations": result.get("citations", []),
+            "query": query,
         }
         
     except Exception as e:
@@ -221,75 +232,109 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         
         # Still increment counter and wait even on error
         _call_count += 1
-        print(f"    ⏳ Waiting 60 seconds before next test case...")
+        print(f"     Waiting 60 seconds before next test case...")
         time.sleep(60)
         
         return {
             "answer": f"Error: {str(e)}",
             "tool_calls": [],
-            "query": query
+            "citations": [],
+            "query": query,
         }
 
 
 # ============================================================================
-# STEP 5: DEFINE EVALUATORS (Same as before, with improvements)
+# STEP 5: DEFINE LLM-JUDGE EVALUATOR
 # ============================================================================
 
-def exact_tool_sequence_evaluator(run: Run, example: Example) -> dict:
-    """
-    Evaluator 1: Tool Sequence Match
-    
-    Checks if the agent used the expected sequence of tools.
-    """
-    expected_tools = example.outputs.get("expected_tool_chain", [])
-    actual_tools = run.outputs.get("tool_calls", []) if run.outputs else []
-    
-    # Exact match
-    is_exact_match = actual_tools == expected_tools
-    
-    # Partial match: check if all expected tools were used (in any order)
-    expected_set = set(expected_tools)
-    actual_set = set(actual_tools)
-    has_all_tools = expected_set.issubset(actual_set)
-    
-    # Calculate score
-    if is_exact_match:
-        score = 1.0
-        comment = "Perfect match: exact sequence"
-    elif has_all_tools:
-        score = 0.5
-        comment = "Partial match: all tools used but wrong order"
-    else:
-        missing_tools = expected_set - actual_set
-        extra_tools = actual_set - expected_set
-        score = 0.0
-        comment = f"Missing: {missing_tools}, Extra: {extra_tools}"
-    
+def _compute_judge_scores(run: Run, example: Example) -> Dict[str, Any]:
+    """Call the LLM judge once per run and cache the result."""
+    cached = (run.outputs or {}).get("judge_scores") if run.outputs else None
+    if isinstance(cached, dict):
+        return cached
+
+    final_answer = (run.outputs or {}).get("answer", "")
+    citations_model = (run.outputs or {}).get("citations", [])
+
+    ground_truth = {
+        "expected_tool_chain": example.outputs.get("expected_tool_chain", []),
+        "expected_answer_summary": example.outputs.get("expected_answer_summary"),
+        "answer_gt": example.outputs.get("answer_gt"),
+        "citations_gt": example.outputs.get("citations_gt", []),
+    }
+    judge_context = {
+        "category": example.outputs.get("category"),
+        "user_query": example.inputs.get("query"),
+        "ground_truth": ground_truth,
+        "agent_output": {
+            "final_answer": final_answer,
+            "tool_calls": (run.outputs or {}).get("tool_calls", []),
+            "citations_model": citations_model,
+        },
+        "constraints": {
+            "tolerance": {},
+            "allow_optional_tools": True,
+            "order_tolerance": "soft",
+        },
+    }
+    candidate = {
+        "answer": final_answer,
+        "tool_trace": (run.outputs or {}).get("tool_calls", []),
+    }
+
+    try:
+        judge = get_llm_judge()
+        judge_scores = judge.judge(judge_context, candidate) or {}
+    except Exception as exc:
+        judge_scores = {"error": str(exc)}
+
+    if run.outputs is not None and isinstance(run.outputs, dict):
+        run.outputs["judge_scores"] = judge_scores
+
+    return judge_scores
+
+
+def llm_overall_evaluator(run: Run, example: Example) -> dict:
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("overall_score") or 0.0)
+    comment = json.dumps(judge_scores, ensure_ascii=False)
     return {
-        "key": "tool_sequence_match",
+        "key": "llm_overall",
         "score": score,
-        "comment": comment
+        "comment": comment,
     }
 
 
-def answer_presence_evaluator(run: Run, example: Example) -> dict:
-    """
-    Evaluator 2: Answer Presence
-    
-    Simple check that the agent produced a non-empty, non-error answer.
-    """
-    actual_answer = run.outputs.get("answer", "") if run.outputs else ""
-    
-    # Check if answer exists and is not an error
-    has_valid_answer = (
-        len(actual_answer) > 0 and
-        not actual_answer.startswith("Error:")
-    )
-    
+def llm_factual_evaluator(run: Run, example: Example) -> dict:
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("facts_score") or 0.0)
+    comment = json.dumps(judge_scores, ensure_ascii=False)
     return {
-        "key": "answer_presence",
-        "score": 1.0 if has_valid_answer else 0.0,
-        "comment": f"Answer length: {len(actual_answer)} chars"
+        "key": "llm_factual",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_sentiment_evaluator(run: Run, example: Example) -> dict:
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("sentiment_score") or 0.0)
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_sentiment",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_tool_use_evaluator(run: Run, example: Example) -> dict:
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("tool_use_score") or 0.0)
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_tool_use",
+        "score": score,
+        "comment": comment,
     }
 
 
@@ -314,8 +359,10 @@ def run_evaluation_with_agent(dataset_name: str, agent):
         agent_wrapper,
         data=dataset_name,
         evaluators=[
-            exact_tool_sequence_evaluator,
-            answer_presence_evaluator
+            llm_tool_use_evaluator,
+            llm_factual_evaluator,
+            llm_sentiment_evaluator,
+            llm_overall_evaluator,
         ],
         experiment_prefix="G1-Agent-Eval",
         max_concurrency=1  # Run one at a time to avoid overloading
@@ -344,12 +391,12 @@ def display_results(results):
         for metric_name, metric_value in results.aggregate_results.items():
             print(f"   {metric_name}: {metric_value}")
     
-    print("\n🔗 View detailed results:")
+    print("\n View detailed results:")
     print("   1. Go to https://smith.langchain.com/")
     print("   2. Navigate to project: G1 Agent Evaluation")
     print("   3. View individual test runs and traces")
     
-    print("\n✅ Evaluation complete!")
+    print("\n Evaluation complete!")
     print("=" * 60)
 
 
@@ -374,22 +421,20 @@ def main():
             if var == "GEMINI_API_KEY":
                 print(f"    ⚠ {var} not set ({description}) - OK if using local LLM")
             else:
-                print(f"    ❌ {var} not set ({description})")
+                print(f"     {var} not set ({description})")
                 missing_vars.append(var)
         else:
             print(f"    ✓ {var} is set")
     
     if missing_vars:
-        print("\n❌ Please set required environment variables and try again.")
+        print("\n Please set required environment variables and try again.")
         return
     
     # Find dataset file
-    dataset_file = "golden_test_dataset_v2.json"
+    dataset_file = "evaluation/golden_combined_dataset mini.json"
     if not os.path.exists(dataset_file):
-        dataset_file = os.path.join("evaluation", "golden_test_dataset_v2.json")
-        if not os.path.exists(dataset_file):
-            print(f"\n❌ Error: Dataset file not found!")
-            return
+        print(f"\n Error: Dataset file not found!")
+        return
     
     try:
         # Load dataset and create LangSmith dataset
@@ -412,7 +457,7 @@ def main():
         print("   4. Re-run evaluation to measure improvements")
         
     except Exception as e:
-        print(f"\n❌ Evaluation failed with error:")
+        print(f"\n Evaluation failed with error:")
         print(f"   {e}")
         import traceback
         traceback.print_exc()
@@ -420,4 +465,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
