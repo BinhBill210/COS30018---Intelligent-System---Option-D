@@ -2,12 +2,13 @@
 Simple LangSmith Evaluation Script for G1 Agent - WITH ACTUAL AGENT
 ====================================================================
 
+
 This version shows how to integrate your actual G1 agent with the evaluation.
 
 This script demonstrates:
 1. Loading your actual LangChain agent
 2. Tracking tool calls with @traceable
-3. Evaluating real agent responses
+3. Evaluating real agent responses using UnifiedLLMJudge
 
 Setup Requirements:
 - Set LANGSMITH_API_KEY in your environment
@@ -31,7 +32,7 @@ from langsmith import Client
 from langsmith.schemas import Run, Example
 from langsmith.run_helpers import traceable
 from dotenv import load_dotenv
-from llm_judge import get_llm_judge
+from llm_judge import get_unified_llm_judge 
 
 # Load environment variables from .env file
 load_dotenv()
@@ -103,6 +104,8 @@ def create_langsmith_dataset(test_cases: List[Dict[str, Any]]) -> str:
             "numeric_tolerances": test_case.get("numeric_tolerances"),
             "test_id": test_case.get("test_id", ""),
             "category": test_case.get("category", ""),
+            "query_type": test_case.get("query_type", "specific"),  # NEW: Added for factual eval
+            "response_tone": test_case.get("response_tone", "professional"),  # NEW: Added for professionalism eval
         }
         outputs = {k: v for k, v in outputs.items() if v is not None}
         client.create_example(inputs=inputs, outputs=outputs, dataset_id=dataset.id)
@@ -227,13 +230,10 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f" Error running agent on query: {query[:50]}...")
-        print(f" Error: {e}")
-        
-        # Still increment counter and wait even on error
-        _call_count += 1
-        print(f"     Waiting 60 seconds before next test case...")
-        time.sleep(60)
+        print(f"❌ Error running agent on query: {query[:50]}...")
+        print(f"   Error: {e}")
+        import traceback
+        traceback.print_exc()
         
         return {
             "answer": f"Error: {str(e)}",
@@ -244,11 +244,11 @@ def run_g1_agent_with_tracing(agent, query: str) -> Dict[str, Any]:
 
 
 # ============================================================================
-# STEP 5: DEFINE LLM-JUDGE EVALUATOR
+# STEP 5: DEFINE UNIFIED LLM-JUDGE EVALUATORS
 # ============================================================================
 
 def _compute_judge_scores(run: Run, example: Example) -> Dict[str, Any]:
-    """Call the LLM judge once per run and cache the result."""
+    """Call the Unified LLM judge once per run and cache the result."""
     cached = (run.outputs or {}).get("judge_scores") if run.outputs else None
     if isinstance(cached, dict):
         return cached
@@ -261,6 +261,8 @@ def _compute_judge_scores(run: Run, example: Example) -> Dict[str, Any]:
         "expected_answer_summary": example.outputs.get("expected_answer_summary"),
         "answer_gt": example.outputs.get("answer_gt"),
         "citations_gt": example.outputs.get("citations_gt", []),
+        "query_type": example.outputs.get("query_type", "specific"),  # NEW
+        "response_tone": example.outputs.get("response_tone", "professional"),  # NEW
     }
     judge_context = {
         "category": example.outputs.get("category"),
@@ -283,8 +285,8 @@ def _compute_judge_scores(run: Run, example: Example) -> Dict[str, Any]:
     }
 
     try:
-        judge = get_llm_judge()
-        judge_scores = judge.judge(judge_context, candidate) or {}
+        judge = get_unified_llm_judge()  # CHANGED: Use unified judge
+        judge_scores = judge.judge_comprehensive(judge_context, candidate) or {}  # CHANGED: Use judge_comprehensive
     except Exception as exc:
         judge_scores = {"error": str(exc)}
 
@@ -294,7 +296,10 @@ def _compute_judge_scores(run: Run, example: Example) -> Dict[str, Any]:
     return judge_scores
 
 
+# UPDATED EVALUATORS to match UnifiedLLMJudge output fields
+
 def llm_overall_evaluator(run: Run, example: Example) -> dict:
+    """Overall quality evaluator"""
     judge_scores = _compute_judge_scores(run, example)
     score = float(judge_scores.get("overall_score") or 0.0)
     comment = json.dumps(judge_scores, ensure_ascii=False)
@@ -306,8 +311,9 @@ def llm_overall_evaluator(run: Run, example: Example) -> dict:
 
 
 def llm_factual_evaluator(run: Run, example: Example) -> dict:
+    """Factual correctness evaluator"""
     judge_scores = _compute_judge_scores(run, example)
-    score = float(judge_scores.get("facts_score") or 0.0)
+    score = float(judge_scores.get("factual_correctness") or 0.0)  # CHANGED: was facts_score
     comment = json.dumps(judge_scores, ensure_ascii=False)
     return {
         "key": "llm_factual",
@@ -316,23 +322,73 @@ def llm_factual_evaluator(run: Run, example: Example) -> dict:
     }
 
 
-def llm_sentiment_evaluator(run: Run, example: Example) -> dict:
+def llm_completeness_evaluator(run: Run, example: Example) -> dict:
+    """Answer completeness evaluator"""
     judge_scores = _compute_judge_scores(run, example)
-    score = float(judge_scores.get("sentiment_score") or 0.0)
+    score = float(judge_scores.get("completeness") or 0.0)  # NEW
     comment = json.dumps(judge_scores, ensure_ascii=False)
     return {
-        "key": "llm_sentiment",
+        "key": "llm_completeness",
         "score": score,
         "comment": comment,
     }
 
 
-def llm_tool_use_evaluator(run: Run, example: Example) -> dict:
+def llm_relevance_evaluator(run: Run, example: Example) -> dict:
+    """Answer relevance evaluator"""
     judge_scores = _compute_judge_scores(run, example)
-    score = float(judge_scores.get("tool_use_score") or 0.0)
+    score = float(judge_scores.get("relevance") or 0.0)  # NEW
     comment = json.dumps(judge_scores, ensure_ascii=False)
     return {
-        "key": "llm_tool_use",
+        "key": "llm_relevance",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_clarity_evaluator(run: Run, example: Example) -> dict:
+    """Answer clarity evaluator"""
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("clarity") or 0.0)  # NEW
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_clarity",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_helpfulness_evaluator(run: Run, example: Example) -> dict:
+    """Answer helpfulness evaluator"""
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("helpfulness") or 0.0)  # NEW
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_helpfulness",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_professionalism_evaluator(run: Run, example: Example) -> dict:
+    """Professionalism evaluator"""
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("professionalism") or 0.0)  # NEW
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_professionalism",
+        "score": score,
+        "comment": comment,
+    }
+
+
+def llm_citation_quality_evaluator(run: Run, example: Example) -> dict:
+    """Citation quality evaluator"""
+    judge_scores = _compute_judge_scores(run, example)
+    score = float(judge_scores.get("citation_quality") or 0.0)  # NEW
+    comment = json.dumps(judge_scores, ensure_ascii=False)
+    return {
+        "key": "llm_citation_quality",
         "score": score,
         "comment": comment,
     }
@@ -354,15 +410,19 @@ def run_evaluation_with_agent(dataset_name: str, agent):
         """Wrapper that LangSmith will call for each test case."""
         return run_g1_agent_with_tracing(agent, inputs["query"])
     
-    # Run evaluation
+    # Run evaluation with UPDATED evaluators
     results = client.evaluate(
         agent_wrapper,
         data=dataset_name,
         evaluators=[
-            llm_tool_use_evaluator,
-            llm_factual_evaluator,
-            llm_sentiment_evaluator,
             llm_overall_evaluator,
+            llm_factual_evaluator,
+            llm_completeness_evaluator,
+            llm_relevance_evaluator,
+            llm_clarity_evaluator,
+            llm_helpfulness_evaluator,
+            llm_professionalism_evaluator,
+            llm_citation_quality_evaluator,
         ],
         experiment_prefix="G1-Agent-Eval",
         max_concurrency=1  # Run one at a time to avoid overloading
@@ -391,12 +451,12 @@ def display_results(results):
         for metric_name, metric_value in results.aggregate_results.items():
             print(f"   {metric_name}: {metric_value}")
     
-    print("\n View detailed results:")
+    print("\n✅ View detailed results:")
     print("   1. Go to https://smith.langchain.com/")
     print("   2. Navigate to project: G1 Agent Evaluation")
     print("   3. View individual test runs and traces")
     
-    print("\n Evaluation complete!")
+    print("\n🎉 Evaluation complete!")
     print("=" * 60)
 
 
@@ -421,19 +481,19 @@ def main():
             if var == "GEMINI_API_KEY":
                 print(f"    ⚠ {var} not set ({description}) - OK if using local LLM")
             else:
-                print(f"     {var} not set ({description})")
+                print(f"    ❌ {var} not set ({description})")
                 missing_vars.append(var)
         else:
             print(f"    ✓ {var} is set")
     
     if missing_vars:
-        print("\n Please set required environment variables and try again.")
+        print("\n❌ Please set required environment variables and try again.")
         return
     
     # Find dataset file
     dataset_file = "evaluation/golden_combined_dataset mini.json"
     if not os.path.exists(dataset_file):
-        print(f"\n Error: Dataset file not found!")
+        print(f"\n❌ Error: Dataset file not found!")
         return
     
     try:
@@ -457,7 +517,7 @@ def main():
         print("   4. Re-run evaluation to measure improvements")
         
     except Exception as e:
-        print(f"\n Evaluation failed with error:")
+        print(f"\n❌ Evaluation failed with error:")
         print(f"   {e}")
         import traceback
         traceback.print_exc()
