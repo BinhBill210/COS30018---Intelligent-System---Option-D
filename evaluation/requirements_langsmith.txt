@@ -1,0 +1,19 @@
+# LangSmith Evaluation Requirements
+# ==================================
+# Install these packages for LangSmith evaluation
+#
+# Usage:
+#   conda activate langchain-demo
+#   pip install -r evaluation/requirements_langsmith.txt
+
+# Core LangSmith
+langsmith>=0.4.16
+
+# LangChain (should already be installed, but included for completeness)
+langchain>=0.3.27
+langchain-core>=0.3.74
+langchain-community>=0.3.27
+
+# Environment management
+python-dotenv>=1.1.0
+
