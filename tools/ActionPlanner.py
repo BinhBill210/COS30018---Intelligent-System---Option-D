@@ -248,7 +248,7 @@ class ActionPlannerTool:
         budget_factor = min(1.0, constraints.get('budget', 5000) / 5000)
         success_probability = min(0.95, base_probability + action_bonus * budget_factor)
 
-        # Return structured result - consistent with other tools
+        # Return structured result 
         return {
             "business_id": business_id,
             "goals": goals,

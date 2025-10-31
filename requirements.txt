@@ -1,0 +1,32 @@
+# --- Core LLM/AI Frameworks ---
+# LangChain dependencies (using the modern split packages for better reliability)
+langchain>=0.3.27
+langchain-core>=0.3.74
+langchain-community>=0.3.27
+
+# Google Gemini API
+google-generativeai>=0.3.0
+
+# Transformer models (for embeddings or local LLMs)
+transformers>=4.55.0
+
+# PyTorch (required by many AI libraries like transformers)
+torch>=2.0.0
+
+chromadb>=0.4.0
+langchain-chroma>=0.1.0
+pandas>=2.3.0 # Pulled from .yml files (2.3.*)
+numpy>=1.26.4 # Pulled from .yml files (1.26.4)
+scipy>=1.15.0 # Pulled from .yml files (1.15.*)
+scikit-learn>=1.7.0 # Pulled from .yml files (1.7.*)
+
+streamlit>=1.28.0
+python-dotenv>=1.1.0 
+
+pydantic>=2.0.0 
+cryptography>=41.0.0
+keyring>=24.0.0
+pyyaml>=6.0
+accelerate>=0.26.0
+sentence-transformers>=5.1.0
+tqdm>=4.67.0
