@@ -12,22 +12,36 @@ conda activate langchain-demo
 
 install pytorch based on your version following this link https://pytorch.org/get-started/locally/
 
-manually install streamlit
+
+if you want to preprocessing and embeddings
+first, make sure that the yelp dataset is in the correct location, which is raw_data folder, then run preprocessing
 ```bash
-pip install streamlit
+cd scripts
+python run_preprocessing.py --sample-size <sample size under 7 millions>
+```
+then run embeddings
+```bash
+python migrate_to_chromadb.py
+python migrate_business_to_chromadb.py
+```
+then to create duckdb embedded database
+```bash
+cd migration
+python setup_database.py
 ```
 
+to start the Chroma Server
+```bash
+cd scripts
+python start_chroma_servers.py
+```
 
-1M dataset, chroma, duckdb files: https://drive.google.com/drive/u/0/folders/1enrB0_dKmCJG62NjTBqRG_pZF76Xv4z9
+to setup the .env file
+use the .env.sample file to create .env file
 
-full dataset, chroma, duckdb files: https://liveswinburneeduau-my.sharepoint.com/my?id=%2Fpersonal%2F104788737%5Fstudent%5Fswin%5Fedu%5Fau%2FDocuments%2FFSwinWork%2FFull%20Dataset
-
-.env.sample is there, put the values in the .env file accordingly
-
-run python -m test.run_all.tests to test the tools
-
-run the langchain agent with streamlit
-
+finally, to run the actual system
 ```bash
 streamlit run streamlit_agent.py
 ```
+
+

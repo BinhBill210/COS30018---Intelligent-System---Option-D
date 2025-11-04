@@ -48,7 +48,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run LangChain business agent with selectable LLM backend")
     parser.add_argument("--model", "-m", type=str, choices=["local", "gemini"], 
-                      default="local", help="LLM model to use (default: local)")
+                      default="gemini", help="LLM model to use (default: gemini)")
     
     args = parser.parse_args()
     

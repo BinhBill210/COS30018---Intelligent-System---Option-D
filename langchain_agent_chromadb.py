@@ -166,8 +166,16 @@ def create_langchain_tools_chromadb():
             description="Fuzzy search for businesses by name. Input can be a string (query) or a dict with 'query' and optional 'top_n'. The input query is used to search the business record with the business name most similar to the input query. Returns a list of similar business records.",
             func=lambda input: (
                 print(f"[TOOL CALLED] fuzzy_search with input: {input}") or
-                (business_tool.fuzzy_search(input) if isinstance(input, str)
-                 else business_tool.fuzzy_search(input.get('query', ''), top_n=input.get('top_n', 5)))
+                (
+                    # Try to parse JSON string if it's a string that starts with '{'
+                    (lambda i: print("DEBUG: Processing JSON string input") or business_tool.fuzzy_search(
+                        i.get("query", ""), top_n=i.get("top_n", 5)
+                    ))(json.loads(input)) if isinstance(input, str) and input.strip().startswith('{')
+                    # Regular string input
+                    else business_tool.fuzzy_search(input) if isinstance(input, str)
+                    # Dictionary input
+                    else business_tool.fuzzy_search(input.get('query', ''), top_n=input.get('top_n', 5))
+                )
             )
         ),
         LangChainTool(

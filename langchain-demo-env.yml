@@ -29,11 +29,7 @@ dependencies:
   - fastparquet
   - pyyaml=6.0.*
   
-  # Vector search - keeping FAISS for compatibility during migration
-  # For GPU (if you have CUDA):
-  - faiss-gpu=1.9.*
-  # For CPU only (comment out faiss-gpu and uncomment below):
-  # - faiss-cpu=1.9.*
+
   
   # Web requests
   - requests=2.32.*
@@ -50,14 +46,14 @@ dependencies:
   # Install via pip (latest compatible versions)
   - pip:
       # Core LangChain packages
-      - langchain>=0.3.27
-      - langchain-community>=0.3.27
-      - langchain-core>=0.3.74
-      - langsmith>=0.4.16
+      - langchain==0.3.27
+      - langchain-chroma==0.2.5
+      - langchain-community==0.3.29
+      - langchain-core==0.3.75
+      - langchain-text-splitters==0.3.11
       
       # Vector database - ChromaDB
       - chromadb>=0.4.0
-      - langchain-chroma>=0.1.0
       
       # HuggingFace ecosystem
       - transformers>=4.55.0
@@ -82,3 +78,6 @@ dependencies:
       - google-generativeai>=0.3.0
       - google-auth>=2.17.0
       - google-auth-oauthlib>=1.0.0
+
+      - streamlit
+      - duckdb
