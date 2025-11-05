@@ -44,4 +44,16 @@ finally, to run the actual system
 streamlit run streamlit_agent.py
 ```
 
+to run the behavior evaluation
+```bash
+python behavior_langsmith_eval.py 
+```
+to run the capability evaluation
+```bash
+python capabilities_langsmith_eval.py
+```
 
+to run the LLM judge for agent answer
+```bash
+python simple_langsmith_eval_with_agent.py
+```
